@@ -9,6 +9,8 @@ type Product = {
   name: string;
   sku: string;
   unit: string;
+  category: string | null;
+  sell_price: number | null;
 };
 
 type Movement = {
@@ -24,7 +26,7 @@ const ProductsCatalogue = () => {
   useEffect(() => {
     const load = async () => {
       const [productsRes, movementsRes] = await Promise.all([
-        supabase.from("products").select("id,name,sku,unit").order("created_at", { ascending: false }),
+        supabase.from("products").select("id,name,sku,unit,category,sell_price").order("created_at", { ascending: false }),
         supabase.from("stock_movements").select("product_id,movement_type,quantity"),
       ]);
       setProducts((productsRes.data as Product[]) || []);
@@ -51,13 +53,16 @@ const ProductsCatalogue = () => {
       </div>
 
       <div className="space-y-3">
-        {products.map((p, index) => (
+        {products.map((p) => (
           <div key={p.id} className="rounded-2xl border bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Category</p>
-            <p className="mb-2 text-base font-semibold text-slate-900">Products {index + 1}</p>
-            <p className="text-sm font-medium text-slate-800">{p.name}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+              {p.category?.trim() || "Uncategorized"}
+            </p>
+            <p className="mb-2 text-base font-semibold text-slate-900">{p.name}</p>
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
-              <span className="rounded-full bg-slate-100 px-3 py-1">Pricing: -</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1">
+                Pricing: {typeof p.sell_price === "number" ? p.sell_price.toLocaleString() : "-"}
+              </span>
               <span className="rounded-full bg-slate-100 px-3 py-1">Total Sales: -</span>
               <span className="rounded-full bg-slate-100 px-3 py-1">Stocks: {stockByProduct.get(p.id) || 0}</span>
               <span className="rounded-full bg-slate-100 px-3 py-1">{p.unit}</span>

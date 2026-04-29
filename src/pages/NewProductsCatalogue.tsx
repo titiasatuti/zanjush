@@ -54,6 +54,10 @@ const NewProductsCatalogue = () => {
       sku: finalCode,
       unit: unit.toLowerCase(),
       min_stock: 0,
+      category,
+      sell_price: sellPrice ? Number(sellPrice) : null,
+      cost_price: costPrice ? Number(costPrice) : null,
+      photo_url: uploadedPhotoUrl,
     });
 
     if (error) {
