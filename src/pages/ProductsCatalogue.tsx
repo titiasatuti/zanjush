@@ -71,10 +71,10 @@ const ProductsCatalogue = () => {
               </div>
 
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                <p className="text-right text-xs font-semibold uppercase tracking-wide text-emerald-700">
                   {p.category?.trim() || "Uncategorized"}
                 </p>
-                <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">{p.name}</p>
+                <p className="truncate text-right text-base font-semibold text-slate-900 sm:text-lg">{p.name}</p>
                 <p className="mt-1 text-sm font-medium text-emerald-700">
                   {typeof p.sell_price === "number" ? `Rp ${p.sell_price.toLocaleString()}` : "Price not set"}
                 </p>
