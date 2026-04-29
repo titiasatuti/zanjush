@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { BrowserQRCodeReader } from "@zxing/browser";
+import { BrowserQRCodeReader, IScannerControls } from "@zxing/browser";
 
 type QrCameraScannerProps = {
   onDetected: (value: string) => void;
@@ -23,6 +23,7 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const detectorRef = useRef<InstanceType<BarcodeDetectorConstructor> | null>(null);
+  const zxingControlsRef = useRef<IScannerControls | null>(null);
 
   const [isStarting, setIsStarting] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -34,7 +35,10 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
-    zxingReader.reset();
+    if (zxingControlsRef.current) {
+      zxingControlsRef.current.stop();
+      zxingControlsRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -93,7 +97,7 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
     setEngine("zxing");
     setIsRunning(true);
 
-    zxingReader.decodeFromVideoDevice(undefined, videoRef.current!, (result) => {
+    zxingControlsRef.current = await zxingReader.decodeFromVideoDevice(undefined, videoRef.current!, (result) => {
       const text = result?.getText();
       if (text && text.trim().length > 0) {
         onDetected(text);
