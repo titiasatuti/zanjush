@@ -16,6 +16,8 @@ import NewProductsCatalogue from "./pages/NewProductsCatalogue";
 import Ingredients from "./pages/Ingredients";
 import NewIngredients from "./pages/NewIngredients";
 import Login from "./pages/Login";
+import ProductDetail from "./pages/ProductDetail";
+import IngredientDetail from "./pages/IngredientDetail";
 
 const queryClient = new QueryClient();
 
@@ -67,9 +69,11 @@ const App = () => {
             <Route path="/" element={protectedElement(<Index />)} />
             <Route path="/products" element={protectedElement(<Products />)} />
             <Route path="/products/catalogue" element={protectedElement(<ProductsCatalogue />)} />
+            <Route path="/products/catalogue/:id" element={protectedElement(<ProductDetail />)} />
             <Route path="/products/catalougue/new" element={protectedElement(<NewProductsCatalogue />)} />
             <Route path="/products/catalogue/new" element={<Navigate to="/products/catalougue/new" replace />} />
             <Route path="/products/ingredients" element={protectedElement(<Ingredients />)} />
+            <Route path="/products/ingredients/:id" element={protectedElement(<IngredientDetail />)} />
             <Route path="/products/ingredients/new" element={protectedElement(<NewIngredients />)} />
             <Route path="/scan" element={protectedElement(<Scan />)} />
             <Route path="/labels" element={protectedElement(<Labels />)} />

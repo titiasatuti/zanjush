@@ -39,9 +39,7 @@ const NewIngredients = () => {
 
   const [name, setName] = useState("");
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
-  const [categoryMode, setCategoryMode] = useState<"pick" | "new">("pick");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [newCategory, setNewCategory] = useState("");
+  const [category, setCategory] = useState("");
   const [unit, setUnit] = useState("pcs");
   const [currentStock, setCurrentStock] = useState("");
   const [totalBuyPrice, setTotalBuyPrice] = useState("");
@@ -60,7 +58,7 @@ const NewIngredients = () => {
           new Set((data || []).map((row) => (row.category || "").trim()).filter(Boolean)),
         );
         setExistingCategories(categories);
-        if (categories.length) setSelectedCategory(categories[0]);
+        if (categories.length) setCategory(categories[0]);
       });
   }, []);
 
@@ -83,8 +81,8 @@ const NewIngredients = () => {
   const save = async () => {
     if (!name.trim()) return showError("Nama bahan baku wajib diisi");
 
-    const category = categoryMode === "pick" ? selectedCategory.trim() : newCategory.trim();
-    if (!category) return showError("Kategori bahan baku wajib diisi");
+    const cleanCategory = category.trim();
+    if (!cleanCategory) return showError("Kategori bahan baku wajib diisi");
     if (!unit) return showError("Satuan bahan baku wajib dipilih");
 
     const stockNumber = Number(currentStock || 0);
@@ -102,7 +100,7 @@ const NewIngredients = () => {
     }
 
     const finalCode = itemCode.trim() || generateCode(name);
-    const skuWithCategory = `[CAT:${category}] ${finalCode}`;
+    const skuWithCategory = `[CAT:${cleanCategory}] ${finalCode}`;
 
     const { data: insertedItem, error: insertItemError } = await supabase
       .from("items")
@@ -129,7 +127,7 @@ const NewIngredients = () => {
       sku: skuWithCategory,
       unit: unit.toLowerCase(),
       min_stock: 0,
-      category,
+      category: cleanCategory,
       cost_price: priceNumber > 0 ? priceNumber : null,
       sell_price: null,
       photo_url: uploadedPhotoUrl,
@@ -180,45 +178,17 @@ const NewIngredients = () => {
 
         <div>
           <Label>Kategori bahan baku</Label>
-          <div className="mb-2 flex gap-2">
-            <Button
-              type="button"
-              variant={categoryMode === "pick" ? "default" : "secondary"}
-              className="rounded-xl"
-              onClick={() => setCategoryMode("pick")}
-            >
-              Pilih Kategori
-            </Button>
-            <Button
-              type="button"
-              variant={categoryMode === "new" ? "default" : "secondary"}
-              className="rounded-xl"
-              onClick={() => setCategoryMode("new")}
-            >
-              Buat Kategori Baru
-            </Button>
-          </div>
-
-          {categoryMode === "pick" ? (
-            <select
-              className="h-10 w-full rounded-md border px-3 text-sm"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-            >
-              <option value="">Pilih kategori</option>
-              {existingCategories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <Input
-              value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
-              placeholder="Masukkan kategori baru"
-            />
-          )}
+          <Input
+            list="ingredient-categories"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="Ketik kategori baru atau pilih yang sudah ada"
+          />
+          <datalist id="ingredient-categories">
+            {existingCategories.map((cat) => (
+              <option key={cat} value={cat} />
+            ))}
+          </datalist>
         </div>
 
         <div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,11 +15,23 @@ const NewProductsCatalogue = () => {
   const [name, setName] = useState("");
   const [sellPrice, setSellPrice] = useState("");
   const [category, setCategory] = useState("Uncategorized");
+  const [existingCategories, setExistingCategories] = useState<string[]>([]);
   const [unit, setUnit] = useState("Pcs");
   const [costPrice, setCostPrice] = useState("");
   const [itemCode, setItemCode] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from("products")
+      .select("category")
+      .not("category", "is", null)
+      .then(({ data }) => {
+        const categories = Array.from(new Set((data || []).map((row) => (row.category || "").trim()).filter(Boolean)));
+        setExistingCategories(categories);
+      });
+  }, []);
 
   const uploadPhoto = async () => {
     if (!photoFile) return null;
@@ -54,7 +66,7 @@ const NewProductsCatalogue = () => {
       sku: finalCode,
       unit: unit.toLowerCase(),
       min_stock: 0,
-      category,
+      category: category.trim() || "Uncategorized",
       sell_price: sellPrice ? Number(sellPrice) : null,
       cost_price: costPrice ? Number(costPrice) : null,
       photo_url: uploadedPhotoUrl,
@@ -88,8 +100,18 @@ const NewProductsCatalogue = () => {
         </div>
 
         <div>
-          <Label>Katetori</Label>
-          <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Uncategorized" />
+          <Label>Kategori</Label>
+          <Input
+            list="catalogue-categories"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="Ketik kategori baru atau pilih yang sudah ada"
+          />
+          <datalist id="catalogue-categories">
+            {existingCategories.map((cat) => (
+              <option key={cat} value={cat} />
+            ))}
+          </datalist>
         </div>
 
         <div>

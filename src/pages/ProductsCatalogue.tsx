@@ -78,7 +78,7 @@ const ProductsCatalogue = () => {
 
             <div className="space-y-3">
               {categoryProducts.map((p) => (
-                <div key={p.id} className="rounded-3xl border bg-white p-3 shadow-sm">
+                <Link key={p.id} to={`/products/catalogue/${p.id}`} className="block rounded-3xl border bg-white p-3 shadow-sm transition hover:shadow-md">
                   <div className="flex items-start gap-3 sm:gap-4">
                     <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
                       {p.photo_url ? (
@@ -104,7 +104,7 @@ const ProductsCatalogue = () => {
                       </div>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </section>
