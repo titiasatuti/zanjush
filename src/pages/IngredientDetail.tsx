@@ -23,7 +23,6 @@ const IngredientDetail = () => {
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [unit, setUnit] = useState("");
-  const [costPrice, setCostPrice] = useState("");
   const [adjustQty, setAdjustQty] = useState("1");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -48,16 +47,6 @@ const IngredientDetail = () => {
       setName(data.name);
       setSku(data.sku);
       setUnit(data.unit);
-
-      const { data: mirrorData } = await supabase
-        .from("products")
-        .select("cost_price")
-        .eq("id", id)
-        .maybeSingle();
-
-      setCostPrice(
-        typeof mirrorData?.cost_price === "number" ? mirrorData.cost_price.toString() : "",
-      );
     };
 
     load();
@@ -76,25 +65,9 @@ const IngredientDetail = () => {
       })
       .eq("id", id);
 
-    if (error) {
-      setIsSaving(false);
-      return showError(error.message);
-    }
-
-    const { error: mirrorError } = await supabase
-      .from("products")
-      .update({
-        name: name.trim(),
-        sku: sku.trim(),
-        unit: unit.trim().toLowerCase(),
-        cost_price: costPrice ? Number(costPrice) : null,
-      })
-      .eq("id", id);
-
     setIsSaving(false);
 
-    if (mirrorError) return showError(mirrorError.message);
-
+    if (error) return showError(error.message);
     showSuccess("Perubahan bahan baku disimpan");
   };
 
@@ -132,8 +105,6 @@ const IngredientDetail = () => {
     const { error } = await supabase.from("items").update({ is_active: false }).eq("id", id);
     if (error) return showError(error.message);
 
-    await supabase.from("products").delete().eq("id", id);
-
     showSuccess("Bahan baku dihapus");
     navigate("/products/ingredients");
   };
@@ -155,7 +126,6 @@ const IngredientDetail = () => {
         <div><Label>Nama</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div><Label>Kode / SKU</Label><Input value={sku} onChange={(e) => setSku(e.target.value)} /></div>
         <div><Label>Satuan</Label><Input value={unit} onChange={(e) => setUnit(e.target.value)} /></div>
-        <div><Label>Harga Modal</Label><Input type="number" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} /></div>
         <Button className="rounded-xl bg-emerald-500 hover:bg-emerald-600" onClick={saveChanges} disabled={isSaving}>
           {isSaving ? "Saving..." : "Simpan Perubahan"}
         </Button>

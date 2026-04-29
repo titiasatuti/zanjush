@@ -50,12 +50,16 @@ const NewIngredients = () => {
 
   useEffect(() => {
     supabase
-      .from("products")
-      .select("category")
-      .not("category", "is", null)
+      .from("items")
+      .select("sku")
+      .eq("type", "ingredient")
       .then(({ data }) => {
         const categories = Array.from(
-          new Set((data || []).map((row) => (row.category || "").trim()).filter(Boolean)),
+          new Set(
+            (data || [])
+              .map((row) => (row.sku?.match(/\[CAT:(.*?)\]/)?.[1] || "").trim())
+              .filter(Boolean),
+          ),
         );
         setExistingCategories(categories);
         if (categories.length) setCategory(categories[0]);
@@ -119,23 +123,6 @@ const NewIngredients = () => {
     if (insertItemError || !insertedItem) {
       setIsSaving(false);
       return showError(insertItemError?.message || "Gagal menyimpan bahan baku");
-    }
-
-    const { error: productMirrorError } = await supabase.from("products").insert({
-      id: insertedItem.id,
-      name: name.trim(),
-      sku: skuWithCategory,
-      unit: unit.toLowerCase(),
-      min_stock: 0,
-      category: cleanCategory,
-      cost_price: priceNumber > 0 ? priceNumber : null,
-      sell_price: null,
-      photo_url: uploadedPhotoUrl,
-    });
-
-    if (productMirrorError) {
-      setIsSaving(false);
-      return showError(productMirrorError.message);
     }
 
     if (stockNumber > 0 || priceNumber > 0 || notes.trim()) {

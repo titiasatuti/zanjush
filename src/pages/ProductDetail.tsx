@@ -18,6 +18,20 @@ type Product = {
   photo_url: string | null;
 };
 
+type IngredientOption = {
+  id: string;
+  name: string;
+  unit: string;
+};
+
+type ProductIngredient = {
+  id: string;
+  ingredient_id: string;
+  qty_per_unit: number;
+  unit_label: string | null;
+  ingredient_name?: string;
+};
+
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -31,6 +45,13 @@ const ProductDetail = () => {
   const [costPrice, setCostPrice] = useState("");
   const [adjustQty, setAdjustQty] = useState("1");
   const [isSaving, setIsSaving] = useState(false);
+
+  const [ingredientOptions, setIngredientOptions] = useState<IngredientOption[]>([]);
+  const [recipeRows, setRecipeRows] = useState<ProductIngredient[]>([]);
+  const [selectedIngredientId, setSelectedIngredientId] = useState("");
+  const [qtyPerUnit, setQtyPerUnit] = useState("1");
+  const [unitLabel, setUnitLabel] = useState("");
+  const [isAddingIngredient, setIsAddingIngredient] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -55,6 +76,45 @@ const ProductDetail = () => {
       });
   }, [id, navigate]);
 
+  useEffect(() => {
+    supabase
+      .from("items")
+      .select("id,name,unit")
+      .eq("type", "ingredient")
+      .eq("is_active", true)
+      .order("name", { ascending: true })
+      .then(({ data }) => {
+        const options = (data as IngredientOption[]) || [];
+        setIngredientOptions(options);
+        if (options.length) {
+          setSelectedIngredientId(options[0].id);
+          setUnitLabel(options[0].unit);
+        }
+      });
+  }, []);
+
+  const loadRecipe = async () => {
+    if (!id) return;
+    const { data, error } = await supabase
+      .from("product_ingredients")
+      .select("id,ingredient_id,qty_per_unit,unit_label")
+      .eq("product_id", id)
+      .order("created_at", { ascending: true });
+
+    if (error) return;
+
+    const rows = (data as ProductIngredient[]) || [];
+    const withNames = rows.map((row) => ({
+      ...row,
+      ingredient_name: ingredientOptions.find((opt) => opt.id === row.ingredient_id)?.name || "Unknown",
+    }));
+    setRecipeRows(withNames);
+  };
+
+  useEffect(() => {
+    loadRecipe();
+  }, [id, ingredientOptions.length]);
+
   const saveChanges = async () => {
     if (!id) return;
     setIsSaving(true);
@@ -74,6 +134,33 @@ const ProductDetail = () => {
 
     if (error) return showError(error.message);
     showSuccess("Perubahan produk disimpan");
+  };
+
+  const addRecipeIngredient = async () => {
+    if (!id) return;
+    const qty = Number(qtyPerUnit);
+    if (!selectedIngredientId) return showError("Pilih bahan baku dulu");
+    if (!qty || qty <= 0) return showError("Qty per produk harus lebih dari 0");
+
+    setIsAddingIngredient(true);
+    const { error } = await supabase.from("product_ingredients").insert({
+      product_id: id,
+      ingredient_id: selectedIngredientId,
+      qty_per_unit: qty,
+      unit_label: unitLabel.trim() || null,
+    });
+    setIsAddingIngredient(false);
+
+    if (error) return showError(error.message);
+    showSuccess("Bahan baku ditambahkan ke produk");
+    loadRecipe();
+  };
+
+  const removeRecipeIngredient = async (rowId: string) => {
+    const { error } = await supabase.from("product_ingredients").delete().eq("id", rowId);
+    if (error) return showError(error.message);
+    showSuccess("Bahan baku dihapus dari produk");
+    loadRecipe();
   };
 
   const addStock = async () => {
@@ -135,6 +222,51 @@ const ProductDetail = () => {
         <Button className="rounded-xl bg-emerald-500 hover:bg-emerald-600" onClick={saveChanges} disabled={isSaving}>
           {isSaving ? "Saving..." : "Simpan Perubahan"}
         </Button>
+      </div>
+
+      <div className="mt-4 grid gap-3 rounded-2xl border bg-white p-4">
+        <p className="text-sm font-semibold text-slate-800">Komposisi Bahan Baku per 1 Produk</p>
+        <div className="grid gap-2 sm:grid-cols-4">
+          <select
+            className="h-10 w-full rounded-md border px-3 text-sm sm:col-span-2"
+            value={selectedIngredientId}
+            onChange={(e) => {
+              const value = e.target.value;
+              setSelectedIngredientId(value);
+              const found = ingredientOptions.find((opt) => opt.id === value);
+              if (found) setUnitLabel(found.unit);
+            }}
+          >
+            <option value="">Pilih bahan baku</option>
+            {ingredientOptions.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.name}
+              </option>
+            ))}
+          </select>
+          <Input type="number" min={0.0001} step="0.0001" value={qtyPerUnit} onChange={(e) => setQtyPerUnit(e.target.value)} placeholder="Qty" />
+          <Input value={unitLabel} onChange={(e) => setUnitLabel(e.target.value)} placeholder="Satuan (contoh: buah, tbsp, ml)" />
+        </div>
+        <Button className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-600 sm:w-auto" onClick={addRecipeIngredient} disabled={isAddingIngredient}>
+          {isAddingIngredient ? "Menambahkan..." : "Tambah Bahan ke Produk"}
+        </Button>
+
+        <div className="space-y-2">
+          {recipeRows.length ? (
+            recipeRows.map((row) => (
+              <div key={row.id} className="flex items-center justify-between rounded-xl border bg-slate-50 px-3 py-2 text-sm">
+                <p className="font-medium text-slate-800">
+                  {row.qty_per_unit} {row.unit_label || ""} {row.ingredient_name}
+                </p>
+                <Button variant="destructive" size="sm" className="rounded-lg" onClick={() => removeRecipeIngredient(row.id)}>
+                  Hapus
+                </Button>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-slate-500">Belum ada komposisi bahan baku untuk produk ini.</p>
+          )}
+        </div>
       </div>
 
       <div className="mt-4 grid gap-3 rounded-2xl border bg-white p-4">
