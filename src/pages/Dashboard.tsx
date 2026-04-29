@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 
-type ProductItem = {
+type InventoryItem = {
   id: string;
   name: string;
   type: "product" | "ingredient";
+  min_stock: number;
 };
 
 type Movement = {
@@ -18,7 +19,7 @@ type Movement = {
 };
 
 const Dashboard = () => {
-  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
 
   useEffect(() => {
@@ -26,13 +27,12 @@ const Dashboard = () => {
       const [itemsRes, movementsRes] = await Promise.all([
         supabase
           .from("items")
-          .select("id,name,type")
-          .eq("is_active", true)
-          .eq("type", "product"),
+          .select("id,name,type,min_stock")
+          .eq("is_active", true),
         supabase.from("stock_movements").select("id,product_id,movement_type,quantity"),
       ]);
 
-      setProducts((itemsRes.data as ProductItem[]) || []);
+      setItems((itemsRes.data as InventoryItem[]) || []);
       setMovements((movementsRes.data as Movement[]) || []);
     };
 
@@ -49,42 +49,54 @@ const Dashboard = () => {
     return map;
   }, [movements]);
 
-  const totalProducts = products.length;
+  const totalProducts = items.filter((item) => item.type === "product").length;
+  const totalIngredients = items.filter((item) => item.type === "ingredient").length;
 
   const totalStock = useMemo(() => {
-    return products.reduce((sum, product) => sum + (stockMap.get(product.id) || 0), 0);
-  }, [products, stockMap]);
+    return items.reduce((sum, item) => sum + (stockMap.get(item.id) || 0), 0);
+  }, [items, stockMap]);
 
   const lowStock = useMemo(() => {
-    return products
-      .map((p) => ({
-        ...p,
-        stock: stockMap.get(p.id) || 0,
+    return items
+      .map((item) => ({
+        ...item,
+        stock: stockMap.get(item.id) || 0,
+        threshold: item.min_stock > 0 ? item.min_stock : 10,
       }))
-      .filter((p) => p.stock < 10)
+      .filter((item) => item.stock < item.threshold)
       .sort((a, b) => a.stock - b.stock);
-  }, [products, stockMap]);
+  }, [items, stockMap]);
+
+  const detailPath = (item: InventoryItem) =>
+    item.type === "ingredient" ? `/products/ingredients/${item.id}` : `/products/catalogue/${item.id}`;
 
   return (
     <AppLayout title="Dashboard">
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="rounded-2xl">
           <CardHeader>
-            <CardTitle className="text-sm">Total Products</CardTitle>
+            <CardTitle className="text-sm">Total Produk</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{totalProducts}</CardContent>
         </Card>
 
         <Card className="rounded-2xl">
           <CardHeader>
-            <CardTitle className="text-sm">Total Stock</CardTitle>
+            <CardTitle className="text-sm">Total Bahan Baku</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-semibold">{totalIngredients}</CardContent>
+        </Card>
+
+        <Card className="rounded-2xl">
+          <CardHeader>
+            <CardTitle className="text-sm">Total Stok</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{totalStock}</CardContent>
         </Card>
 
         <Card className="rounded-2xl">
           <CardHeader>
-            <CardTitle className="text-sm">Low Stock (under 10)</CardTitle>
+            <CardTitle className="text-sm">Perlu Restock</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{lowStock.length}</CardContent>
         </Card>
@@ -100,12 +112,15 @@ const Dashboard = () => {
               {lowStock.map((item) => (
                 <Link
                   key={item.id}
-                  to={`/products/catalogue/${item.id}`}
-                  className="flex items-center justify-between rounded-xl border bg-slate-50 px-3 py-2 text-sm transition hover:bg-slate-100"
+                  to={detailPath(item)}
+                  className="flex items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3 py-2 text-sm transition hover:bg-slate-100"
                 >
-                  <span className="font-medium text-slate-800">{item.name}</span>
+                  <div>
+                    <span className="font-medium text-slate-800">{item.name}</span>
+                    <p className="mt-0.5 text-xs capitalize text-slate-500">{item.type}</p>
+                  </div>
                   <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
-                    Sisa: {item.stock}
+                    Sisa: {item.stock} / Min: {item.threshold}
                   </span>
                 </Link>
               ))}

@@ -37,7 +37,7 @@ const ProductsCatalogue = () => {
       ]);
 
       const allProducts = (productsRes.data as Product[]) || [];
-      const catalogueOnly = allProducts.filter((p) => !isIngredientMirror(p.sku));
+      const catalogueOnly = allProducts.filter((p) => !isIngredientMirror(p.sku) && p.category !== "Diarsipkan");
 
       setProducts(catalogueOnly);
       setMovements((movementsRes.data as Movement[]) || []);

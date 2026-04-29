@@ -1,9 +1,11 @@
 import { ReactNode } from "react";
 import { NavLink, Link } from "react-router-dom";
-import { LayoutDashboard, Package2, QrCode, ArrowLeft, ClipboardList } from "lucide-react";
+import { LayoutDashboard, Package2, QrCode, ArrowLeft, ClipboardList, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BottomNav } from "@/components/bottom-nav";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { showSuccess } from "@/utils/toast";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -19,14 +21,20 @@ type AppLayoutProps = {
 };
 
 export const AppLayout = ({ children, title, backTo }: AppLayoutProps) => {
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    showSuccess("Berhasil logout");
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto flex max-w-7xl">
-        <aside className="sticky top-0 hidden h-screen w-64 border-r bg-white p-4 md:block">
+        <aside className="sticky top-0 hidden h-screen w-64 border-r bg-white p-4 md:flex md:flex-col">
           <div className="mb-8 rounded-2xl bg-emerald-500 p-4 text-white">
             <p className="text-xs uppercase tracking-wider text-emerald-100">Operations</p>
             <h1 className="text-xl font-semibold">Juice Inventory</h1>
           </div>
+
           <nav className="space-y-2">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -47,20 +55,43 @@ export const AppLayout = ({ children, title, backTo }: AppLayoutProps) => {
               );
             })}
           </nav>
+
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={signOut}
+            className="mt-auto h-11 justify-start rounded-xl text-slate-700"
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </Button>
         </aside>
+
         <main className="w-full p-4 pb-24 md:p-8 md:pb-8">
-          <header className="mb-6 flex items-start gap-3">
-            {backTo && (
-              <Button asChild variant="secondary" size="icon" className="mt-0.5 rounded-xl">
-                <Link to={backTo} aria-label="Back">
-                  <ArrowLeft className="h-4 w-4" />
-                </Link>
-              </Button>
-            )}
-            <div>
-              <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
-              <p className="text-sm text-slate-500">Fast daily operations first, details second.</p>
+          <header className="mb-6 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              {backTo && (
+                <Button asChild variant="secondary" size="icon" className="mt-0.5 rounded-xl">
+                  <Link to={backTo} aria-label="Back">
+                    <ArrowLeft className="h-4 w-4" />
+                  </Link>
+                </Button>
+              )}
+              <div>
+                <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
+                <p className="text-sm text-slate-500">Fast daily operations first, details second.</p>
+              </div>
             </div>
+
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={signOut}
+              className="hidden rounded-xl sm:inline-flex md:hidden"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
           </header>
           {children}
         </main>
