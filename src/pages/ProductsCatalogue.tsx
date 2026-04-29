@@ -11,6 +11,7 @@ type Product = {
   unit: string;
   category: string | null;
   sell_price: number | null;
+  photo_url: string | null;
 };
 
 type Movement = {
@@ -26,7 +27,10 @@ const ProductsCatalogue = () => {
   useEffect(() => {
     const load = async () => {
       const [productsRes, movementsRes] = await Promise.all([
-        supabase.from("products").select("id,name,sku,unit,category,sell_price").order("created_at", { ascending: false }),
+        supabase
+          .from("products")
+          .select("id,name,sku,unit,category,sell_price,photo_url")
+          .order("created_at", { ascending: false }),
         supabase.from("stock_movements").select("product_id,movement_type,quantity"),
       ]);
       setProducts((productsRes.data as Product[]) || []);
@@ -54,19 +58,34 @@ const ProductsCatalogue = () => {
 
       <div className="space-y-3">
         {products.map((p) => (
-          <div key={p.id} className="rounded-2xl border bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-              {p.category?.trim() || "Uncategorized"}
-            </p>
-            <p className="mb-2 text-base font-semibold text-slate-900">{p.name}</p>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
-              <span className="rounded-full bg-slate-100 px-3 py-1">
-                Pricing: {typeof p.sell_price === "number" ? p.sell_price.toLocaleString() : "-"}
-              </span>
-              <span className="rounded-full bg-slate-100 px-3 py-1">Total Sales: -</span>
-              <span className="rounded-full bg-slate-100 px-3 py-1">Stocks: {stockByProduct.get(p.id) || 0}</span>
-              <span className="rounded-full bg-slate-100 px-3 py-1">{p.unit}</span>
-              <span className="rounded-full bg-slate-100 px-3 py-1">{p.sku}</span>
+          <div key={p.id} className="rounded-3xl border bg-white p-3 shadow-sm">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
+                {p.photo_url ? (
+                  <img src={p.photo_url} alt={p.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs font-medium text-slate-400">
+                    No Image
+                  </div>
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                  {p.category?.trim() || "Uncategorized"}
+                </p>
+                <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">{p.name}</p>
+                <p className="mt-1 text-sm font-medium text-emerald-700">
+                  {typeof p.sell_price === "number" ? `Rp ${p.sell_price.toLocaleString()}` : "Price not set"}
+                </p>
+
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
+                  <span className="rounded-full bg-slate-100 px-3 py-1">Total Sales: -</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1">Stocks: {stockByProduct.get(p.id) || 0}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1">{p.unit}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1">{p.sku}</span>
+                </div>
+              </div>
             </div>
           </div>
         ))}
