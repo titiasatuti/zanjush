@@ -124,17 +124,30 @@ const NewIngredients = () => {
     }
 
     if (stockNumber > 0) {
-      const noteParts = [`Ingredient ID: ${inserted.id}`, `Harga total beli: ${priceNumber}`, notes.trim() ? `Catatan: ${notes.trim()}` : ""].filter(Boolean);
-      const { error: stockError } = await supabase.from("stock_movements").insert({
-        product_id: inserted.id,
-        movement_type: "in",
-        quantity: stockNumber,
-        note: noteParts.join(" | "),
-      });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (stockError) {
-        setIsSaving(false);
-        return showError(stockError.message);
+      if (!session) {
+        showError("Bahan baku tersimpan, tapi stok awal belum dicatat karena belum login.");
+      } else {
+        const noteParts = [
+          `Ingredient ID: ${inserted.id}`,
+          `Harga total beli: ${priceNumber}`,
+          notes.trim() ? `Catatan: ${notes.trim()}` : "",
+        ].filter(Boolean);
+
+        const { error: stockError } = await supabase.from("stock_movements").insert({
+          product_id: inserted.id,
+          movement_type: "in",
+          quantity: stockNumber,
+          note: noteParts.join(" | "),
+        });
+
+        if (stockError) {
+          setIsSaving(false);
+          return showError(stockError.message);
+        }
       }
     }
 
@@ -190,7 +203,11 @@ const NewIngredients = () => {
               ))}
             </select>
           ) : (
-            <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="Masukkan kategori baru" />
+            <Input
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              placeholder="Masukkan kategori baru"
+            />
           )}
         </div>
 
