@@ -48,7 +48,33 @@ npm run preview -- --host 0.0.0.0 --port $PORT
 
 Namun rekomendasi utama untuk project ini adalah memakai **Static Site**, bukan Web Service.
 
-### 5. Environment Variables
+### 5. Fix error pnpm frozen lockfile
+
+Project ini sudah menambahkan file `.npmrc` berisi:
+
+frozen-lockfile=false
+
+File ini membuat pnpm di environment CI seperti Render tidak gagal ketika `pnpm-lock.yaml` belum sinkron dengan `package.json`.
+
+Project ini juga sudah menambahkan `render.yaml` dengan konfigurasi Static Site:
+
+Build Command:
+
+pnpm install --no-frozen-lockfile && pnpm run build
+
+Publish Directory:
+
+./dist
+
+Rewrite:
+
+/* ke /index.html
+
+Jika service Render sudah terlanjur dibuat sebelum file `render.yaml` ditambahkan, pastikan di dashboard Render Build Command tetap diisi manual dengan:
+
+pnpm install --no-frozen-lockfile && pnpm run build
+
+### 6. Environment Variables
 
 Project ini sudah memakai Supabase URL dan publishable key langsung di:
 
@@ -56,11 +82,11 @@ src/integrations/supabase/client.ts
 
 Jadi tidak wajib menambahkan environment variable untuk menjalankan aplikasi saat ini.
 
-### 6. Routing SPA
+### 7. Routing SPA
 
-Project ini sudah memiliki file `vercel.json`, tetapi untuk Render Static Site Anda perlu menambahkan rewrite rule di dashboard Render agar React Router berjalan saat refresh halaman.
+Project ini sudah memiliki file `render.yaml` untuk rewrite React Router.
 
-Tambahkan rewrite:
+Jika Anda mengatur rewrite manual di dashboard Render, tambahkan:
 
 Source:
 
