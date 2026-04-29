@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
 type ProductItem = {
@@ -89,18 +88,6 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{lowStock.length}</CardContent>
         </Card>
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        <Button asChild className="rounded-xl bg-emerald-500 hover:bg-emerald-600">
-          <Link to="/products">Create Product</Link>
-        </Button>
-        <Button asChild variant="secondary" className="rounded-xl">
-          <Link to="/scan">Scan QR</Link>
-        </Button>
-        <Button asChild variant="secondary" className="rounded-xl">
-          <Link to="/labels">Create Label</Link>
-        </Button>
       </div>
 
       <Card className="rounded-2xl">
