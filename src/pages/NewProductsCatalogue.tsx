@@ -77,12 +77,12 @@ const NewProductsCatalogue = () => {
       return showError(error.message);
     }
 
-    showSuccess("Catalogue saved");
+    showSuccess("Product saved");
     navigate("/products/catalogue");
   };
 
   return (
-    <AppLayout title="New Catalogue" backTo="/products/catalogue">
+    <AppLayout title="New Product" backTo="/products/catalogue">
       <div className="grid gap-3 rounded-2xl border bg-white p-4">
         <div>
           <Label>Image</Label>
@@ -149,7 +149,7 @@ const NewProductsCatalogue = () => {
         </div>
 
         <Button className="rounded-xl bg-emerald-500 hover:bg-emerald-600" onClick={saveCatalogue} disabled={isSaving}>
-          {isSaving ? "Saving..." : "Simpan Katalog"}
+          {isSaving ? "Saving..." : "Simpan Produk"}
         </Button>
       </div>
     </AppLayout>

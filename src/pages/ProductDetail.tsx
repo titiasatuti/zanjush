@@ -73,7 +73,7 @@ const ProductDetail = () => {
     setIsSaving(false);
 
     if (error) return showError(error.message);
-    showSuccess("Perubahan katalog disimpan");
+    showSuccess("Perubahan produk disimpan");
   };
 
   const addStock = async () => {
@@ -108,20 +108,20 @@ const ProductDetail = () => {
     if (!id) return;
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) return showError(error.message);
-    showSuccess("Item katalog dihapus");
+    showSuccess("Produk dihapus");
     navigate("/products/catalogue");
   };
 
   if (!product) {
     return (
-      <AppLayout title="Detail Catalogue">
+      <AppLayout title="Product Detail">
         <p className="text-sm text-slate-500">Loading...</p>
       </AppLayout>
     );
   }
 
   return (
-    <AppLayout title="Detail Catalogue">
+    <AppLayout title="Product Detail">
       <div className="grid gap-3 rounded-2xl border bg-white p-4">
         {product.photo_url && (
           <img src={product.photo_url} alt={product.name} className="h-48 w-full rounded-2xl object-cover" />

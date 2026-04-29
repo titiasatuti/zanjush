@@ -20,6 +20,8 @@ type Movement = {
   quantity: number;
 };
 
+const isIngredientMirror = (sku: string) => sku.includes("[CAT:") || sku.includes("ING-");
+
 const ProductsCatalogue = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -33,7 +35,11 @@ const ProductsCatalogue = () => {
           .order("created_at", { ascending: false }),
         supabase.from("stock_movements").select("product_id,movement_type,quantity"),
       ]);
-      setProducts((productsRes.data as Product[]) || []);
+
+      const allProducts = (productsRes.data as Product[]) || [];
+      const catalogueOnly = allProducts.filter((p) => !isIngredientMirror(p.sku));
+
+      setProducts(catalogueOnly);
       setMovements((movementsRes.data as Movement[]) || []);
     };
     load();
@@ -61,10 +67,10 @@ const ProductsCatalogue = () => {
   }, [products]);
 
   return (
-    <AppLayout title="Catalogue" backTo="/products">
+    <AppLayout title="Products" backTo="/products">
       <div className="mb-4">
         <Button asChild className="rounded-xl bg-emerald-500 hover:bg-emerald-600">
-          <Link to="/products/catalougue/new">Create New Catalogue</Link>
+          <Link to="/products/catalougue/new">Create New Product</Link>
         </Button>
       </div>
 
@@ -110,7 +116,7 @@ const ProductsCatalogue = () => {
           </section>
         ))}
 
-        {!products.length && <p className="text-sm text-slate-500">No catalogue yet. Create your first one.</p>}
+        {!products.length && <p className="text-sm text-slate-500">No products yet. Create your first one.</p>}
       </div>
     </AppLayout>
   );
