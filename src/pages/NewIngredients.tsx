@@ -123,6 +123,23 @@ const NewIngredients = () => {
       return showError(insertItemError?.message || "Gagal menyimpan bahan baku");
     }
 
+    const { error: productMirrorError } = await supabase.from("products").insert({
+      id: insertedItem.id,
+      name: name.trim(),
+      sku: skuWithCategory,
+      unit: unit.toLowerCase(),
+      min_stock: 0,
+      category,
+      cost_price: priceNumber > 0 ? priceNumber : null,
+      sell_price: null,
+      photo_url: uploadedPhotoUrl,
+    });
+
+    if (productMirrorError) {
+      setIsSaving(false);
+      return showError(productMirrorError.message);
+    }
+
     if (stockNumber > 0 || priceNumber > 0 || notes.trim()) {
       const movementNote = [
         notes.trim() ? notes.trim() : null,
