@@ -16,17 +16,9 @@ Aplikasi ini adalah frontend Vite, jadi hasil build akan berupa file statis di f
 
 ### 2. Build Command
 
-Jika Render memakai **pnpm** atau muncul error `ERR_PNPM_OUTDATED_LOCKFILE`, isi **Build Command** dengan:
-
-pnpm install --no-frozen-lockfile && pnpm run build
-
-Jika Render memakai **npm**, gunakan:
+Gunakan:
 
 npm install && npm run build
-
-Rekomendasi untuk error yang Anda alami:
-
-pnpm install --no-frozen-lockfile && pnpm run build
 
 ### 3. Publish Directory
 
@@ -40,39 +32,27 @@ Untuk **Static Site**, Render tidak membutuhkan start command.
 
 Jika Render meminta start command karena Anda memilih tipe **Web Service**, gunakan:
 
-pnpm run preview -- --host 0.0.0.0 --port $PORT
-
-Atau jika memakai npm:
-
 npm run preview -- --host 0.0.0.0 --port $PORT
 
 Namun rekomendasi utama untuk project ini adalah memakai **Static Site**, bukan Web Service.
 
-### 5. Fix error pnpm frozen lockfile
+### 5. Kenapa error `ERR_PNPM_OUTDATED_LOCKFILE` bisa terjadi?
 
-Project ini sudah menambahkan file `.npmrc` berisi:
+Error ini terjadi karena Render mendeteksi file `pnpm-lock.yaml`, lalu otomatis mencoba install dependency memakai pnpm dengan mode frozen lockfile.
 
-frozen-lockfile=false
+Jika isi `pnpm-lock.yaml` tidak sama dengan `package.json`, Render akan gagal dengan pesan:
 
-File ini membuat pnpm di environment CI seperti Render tidak gagal ketika `pnpm-lock.yaml` belum sinkron dengan `package.json`.
+ERR_PNPM_OUTDATED_LOCKFILE
 
-Project ini juga sudah menambahkan `render.yaml` dengan konfigurasi Static Site:
+Solusi yang dipakai project ini adalah:
 
-Build Command:
+- Menghapus `pnpm-lock.yaml`
+- Menggunakan npm untuk deploy
+- Build command menjadi:
 
-pnpm install --no-frozen-lockfile && pnpm run build
+npm install && npm run build
 
-Publish Directory:
-
-./dist
-
-Rewrite:
-
-/* ke /index.html
-
-Jika service Render sudah terlanjur dibuat sebelum file `render.yaml` ditambahkan, pastikan di dashboard Render Build Command tetap diisi manual dengan:
-
-pnpm install --no-frozen-lockfile && pnpm run build
+Jika repository GitHub masih menampilkan error yang sama, pastikan perubahan terbaru sudah masuk ke branch yang dipakai Render, yaitu branch `main`.
 
 ### 6. Environment Variables
 
@@ -135,20 +115,20 @@ for delete
 to public
 using (bucket_id = 'item-photos');
 
-## Ringkasan command
+## Ringkasan konfigurasi Render
 
-Build Command yang direkomendasikan untuk Render jika muncul error pnpm lockfile:
+Service Type:
 
-pnpm install --no-frozen-lockfile && pnpm run build
+Static Site
+
+Build Command:
+
+npm install && npm run build
 
 Publish Directory:
 
 dist
 
-Start Command untuk Static Site:
+Start Command:
 
-Tidak perlu
-
-Start Command jika memakai Web Service:
-
-pnpm run preview -- --host 0.0.0.0 --port $PORT
+Tidak perlu untuk Static Site

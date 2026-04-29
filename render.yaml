@@ -2,7 +2,7 @@ services:
   - type: web
     name: zanjush
     runtime: static
-    buildCommand: pnpm install --no-frozen-lockfile && pnpm run build
+    buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     routes:
       - type: rewrite
