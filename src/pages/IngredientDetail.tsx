@@ -23,33 +23,50 @@ const IngredientDetail = () => {
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [unit, setUnit] = useState("");
+  const [costPrice, setCostPrice] = useState("");
   const [adjustQty, setAdjustQty] = useState("1");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!id) return;
-    supabase
-      .from("items")
-      .select("id,name,sku,unit,photo_url")
-      .eq("id", id)
-      .eq("type", "ingredient")
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          showError("Bahan baku tidak ditemukan");
-          navigate("/products/ingredients");
-          return;
-        }
-        setIngredient(data as Ingredient);
-        setName(data.name);
-        setSku(data.sku);
-        setUnit(data.unit);
-      });
+
+    const load = async () => {
+      const { data, error } = await supabase
+        .from("items")
+        .select("id,name,sku,unit,photo_url")
+        .eq("id", id)
+        .eq("type", "ingredient")
+        .single();
+
+      if (error || !data) {
+        showError("Bahan baku tidak ditemukan");
+        navigate("/products/ingredients");
+        return;
+      }
+
+      setIngredient(data as Ingredient);
+      setName(data.name);
+      setSku(data.sku);
+      setUnit(data.unit);
+
+      const { data: mirrorData } = await supabase
+        .from("products")
+        .select("cost_price")
+        .eq("id", id)
+        .maybeSingle();
+
+      setCostPrice(
+        typeof mirrorData?.cost_price === "number" ? mirrorData.cost_price.toString() : "",
+      );
+    };
+
+    load();
   }, [id, navigate]);
 
   const saveChanges = async () => {
     if (!id) return;
     setIsSaving(true);
+
     const { error } = await supabase
       .from("items")
       .update({
@@ -59,9 +76,10 @@ const IngredientDetail = () => {
       })
       .eq("id", id);
 
-    setIsSaving(false);
-
-    if (error) return showError(error.message);
+    if (error) {
+      setIsSaving(false);
+      return showError(error.message);
+    }
 
     const { error: mirrorError } = await supabase
       .from("products")
@@ -69,8 +87,11 @@ const IngredientDetail = () => {
         name: name.trim(),
         sku: sku.trim(),
         unit: unit.trim().toLowerCase(),
+        cost_price: costPrice ? Number(costPrice) : null,
       })
       .eq("id", id);
+
+    setIsSaving(false);
 
     if (mirrorError) return showError(mirrorError.message);
 
@@ -134,6 +155,7 @@ const IngredientDetail = () => {
         <div><Label>Nama</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div><Label>Kode / SKU</Label><Input value={sku} onChange={(e) => setSku(e.target.value)} /></div>
         <div><Label>Satuan</Label><Input value={unit} onChange={(e) => setUnit(e.target.value)} /></div>
+        <div><Label>Harga Modal</Label><Input type="number" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} /></div>
         <Button className="rounded-xl bg-emerald-500 hover:bg-emerald-600" onClick={saveChanges} disabled={isSaving}>
           {isSaving ? "Saving..." : "Simpan Perubahan"}
         </Button>
