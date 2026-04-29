@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { showSuccess } from "@/utils/toast";
 import { BrandingSettings, defaultBranding, getBrandingIcon, loadBrandingSettings } from "@/lib/branding";
+import { DetailPhotoUploadButton } from "@/components/detail-photo-upload-button";
 
 const navItems = [
   { to: "/", label: "Dasbor", icon: LayoutDashboard },
@@ -112,15 +113,18 @@ export const AppLayout = ({ children, title, backTo }: AppLayoutProps) => {
               </div>
             </div>
 
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={signOut}
-              className="hidden rounded-xl sm:inline-flex md:hidden"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
+            <div className="flex items-center gap-2">
+              <DetailPhotoUploadButton title={title} />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={signOut}
+                className="hidden rounded-xl sm:inline-flex md:hidden"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </Button>
+            </div>
           </header>
           {children}
         </main>
