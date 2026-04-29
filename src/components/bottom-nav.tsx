@@ -3,9 +3,9 @@ import { LayoutDashboard, Package2, QrCode } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/", label: "Dasbor", icon: LayoutDashboard },
   { to: "/scan", label: "Scan", icon: QrCode, center: true },
-  { to: "/products", label: "Products", icon: Package2 },
+  { to: "/products", label: "Produk", icon: Package2 },
 ];
 
 export const BottomNav = () => {

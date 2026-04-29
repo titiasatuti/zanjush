@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,15 +20,27 @@ type ResolvedItem = {
 };
 
 const Scan = () => {
+  const manualInputRef = useRef<HTMLInputElement | null>(null);
   const [payload, setPayload] = useState("");
   const [qty, setQty] = useState(1);
   const [resolved, setResolved] = useState<ResolvedItem | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [isResolving, setIsResolving] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
 
   const safeQty = useMemo(() => (qty > 0 ? qty : 1), [qty]);
 
+  useEffect(() => {
+    manualInputRef.current?.focus();
+  }, []);
+
   const resolveToken = async (rawPayload: string) => {
-    const token = rawPayload.startsWith("v1:") ? rawPayload.replace("v1:", "") : rawPayload;
+    const cleanPayload = rawPayload.trim();
+    if (!cleanPayload || isResolving) return;
+
+    setIsResolving(true);
+
+    const token = cleanPayload.startsWith("v1:") ? cleanPayload.replace("v1:", "") : cleanPayload;
     const { data: batch, error } = await supabase
       .from("stock_batches")
       .select("id,product_id")
@@ -36,7 +48,8 @@ const Scan = () => {
       .maybeSingle();
 
     if (error || !batch) {
-      showError("Token not found");
+      setIsResolving(false);
+      showError("Token tidak ditemukan");
       return;
     }
 
@@ -51,6 +64,8 @@ const Scan = () => {
       readItemStock(batch.product_id),
     ]);
 
+    setIsResolving(false);
+
     if (productRes.data) {
       setResolved({
         id: productRes.data.id,
@@ -61,7 +76,7 @@ const Scan = () => {
         stock,
         batchId: batch.id,
       });
-      setPayload(rawPayload);
+      setPayload(cleanPayload);
       setIsOpen(true);
       showSuccess("Label produk ditemukan");
       return;
@@ -76,7 +91,7 @@ const Scan = () => {
         stock,
         batchId: batch.id,
       });
-      setPayload(rawPayload);
+      setPayload(cleanPayload);
       setIsOpen(true);
       showSuccess("Label bahan baku ditemukan");
       return;
@@ -87,14 +102,24 @@ const Scan = () => {
 
   const resolve = async () => {
     if (!payload.trim()) {
-      showError("Please scan or enter a payload");
+      showError("Scan atau masukkan payload terlebih dahulu");
       return;
     }
     await resolveToken(payload.trim());
   };
 
+  const closeResult = () => {
+    setIsOpen(false);
+    setPayload("");
+    setResolved(null);
+    setQty(1);
+    window.setTimeout(() => manualInputRef.current?.focus(), 100);
+  };
+
   const postMovement = async (type: "in" | "out") => {
-    if (!resolved) return;
+    if (!resolved || isPosting) return;
+
+    setIsPosting(true);
 
     if (type === "out") {
       const stockCheck = await canReduceStock(resolved.id, safeQty);
@@ -105,6 +130,7 @@ const Scan = () => {
         );
         showError(`Stok tidak cukup. Stok tersedia: ${stockCheck.currentStock}`);
         setResolved({ ...resolved, stock: stockCheck.currentStock });
+        setIsPosting(false);
         return;
       }
     }
@@ -114,10 +140,13 @@ const Scan = () => {
       batch_id: resolved.batchId,
       movement_type: type,
       quantity: safeQty,
-      note: `Scan ${resolved.kind} operation`,
+      note: `Operasi scan ${resolved.kind}`,
     });
 
-    if (error) return showError(error.message);
+    if (error) {
+      setIsPosting(false);
+      return showError(error.message);
+    }
 
     const newStock = type === "in" ? resolved.stock + safeQty : resolved.stock - safeQty;
     setResolved({ ...resolved, stock: newStock });
@@ -125,7 +154,8 @@ const Scan = () => {
       type === "in" ? "scan_stock_in" : "scan_stock_out",
       `Scan ${type === "in" ? "tambah" : "kurangi"} stok ${resolved.name} sebanyak ${safeQty}`,
     );
-    showSuccess("Stock updated");
+    showSuccess(type === "in" ? "Stok berhasil ditambah" : "Stok berhasil dikurangi");
+    setIsPosting(false);
   };
 
   return (
@@ -133,25 +163,36 @@ const Scan = () => {
       <div className="grid gap-4">
         <QrCameraScanner onDetected={resolveToken} />
 
-        <div className="rounded-3xl border bg-white p-4">
-          <p className="mb-2 text-sm text-slate-600">
-            Manual / USB scanner input fallback (opaque token only).
+        <div className="rounded-3xl border bg-white p-4 shadow-sm">
+          <p className="mb-2 text-sm font-semibold text-slate-700">
+            Input scanner USB / manual
           </p>
-          <div className="flex gap-2">
+          <p className="mb-3 text-xs text-slate-500">
+            Kolom ini otomatis fokus. Scan barcode/QR dengan scanner USB lalu tekan Enter.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Input
+              ref={manualInputRef}
               value={payload}
               onChange={(e) => setPayload(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") resolve();
+              }}
               placeholder="v1:token..."
-              className="rounded-xl"
+              className="h-12 rounded-2xl"
             />
-            <Button onClick={resolve} className="rounded-xl bg-emerald-500 hover:bg-emerald-600">
-              Resolve
+            <Button
+              onClick={resolve}
+              disabled={isResolving}
+              className="h-12 rounded-2xl bg-emerald-500 hover:bg-emerald-600"
+            >
+              {isResolving ? "Mencari..." : "Cari"}
             </Button>
           </div>
         </div>
       </div>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog open={isOpen} onOpenChange={(open) => (open ? setIsOpen(true) : closeResult())}>
         <DialogContent className="rounded-2xl sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
@@ -168,8 +209,10 @@ const Scan = () => {
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-sm text-slate-500">Stock</p>
-                  <p className="font-semibold text-slate-900">{resolved.stock}</p>
+                  <p className="text-sm text-slate-500">Stok</p>
+                  <p className="font-semibold text-slate-900">
+                    {resolved.stock} {resolved.unit || ""}
+                  </p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3">
                   <p className="text-sm text-slate-500">Harga Jual</p>
@@ -181,22 +224,51 @@ const Scan = () => {
                 </div>
               </div>
 
-              <Input
-                className="rounded-xl"
-                type="number"
-                min={1}
-                value={qty}
-                onChange={(e) => setQty(Number(e.target.value))}
-              />
+              <div>
+                <p className="mb-2 text-sm font-semibold text-slate-700">Jumlah</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {[1, 5, 10].map((value) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant={qty === value ? "default" : "secondary"}
+                      className="rounded-xl"
+                      onClick={() => setQty(value)}
+                    >
+                      {value}
+                    </Button>
+                  ))}
+                  <Input
+                    className="rounded-xl text-center"
+                    type="number"
+                    min={1}
+                    value={qty}
+                    onChange={(e) => setQty(Number(e.target.value))}
+                  />
+                </div>
+              </div>
 
-              <div className="flex gap-2">
-                <Button onClick={() => postMovement("in")} className="flex-1 rounded-xl bg-emerald-500 hover:bg-emerald-600">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button
+                  onClick={() => postMovement("in")}
+                  disabled={isPosting}
+                  className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600"
+                >
                   Tambah Stok
                 </Button>
-                <Button onClick={() => postMovement("out")} variant="secondary" className="flex-1 rounded-xl">
+                <Button
+                  onClick={() => postMovement("out")}
+                  disabled={isPosting}
+                  variant="secondary"
+                  className="h-12 rounded-xl"
+                >
                   Kurangi Stok
                 </Button>
               </div>
+
+              <Button type="button" variant="ghost" onClick={closeResult} className="w-full rounded-xl">
+                Selesai & Scan Lagi
+              </Button>
             </div>
           )}
         </DialogContent>

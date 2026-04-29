@@ -20,6 +20,7 @@ import ProductDetail from "./pages/ProductDetail";
 import IngredientDetail from "./pages/IngredientDetail";
 import History from "./pages/History";
 import Stock from "./pages/Stock";
+import PrintLabel from "./pages/PrintLabel";
 
 const queryClient = new QueryClient();
 
@@ -51,7 +52,7 @@ const App = () => {
   if (!isSessionReady) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">Loading session...</div>
+        <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">Memuat sesi...</div>
       </div>
     );
   }
@@ -78,6 +79,7 @@ const App = () => {
             <Route path="/products/ingredients/:id" element={protectedElement(<IngredientDetail />)} />
             <Route path="/products/ingredients/new" element={protectedElement(<NewIngredients />)} />
             <Route path="/scan" element={protectedElement(<Scan />)} />
+            <Route path="/print-label" element={protectedElement(<PrintLabel />)} />
             <Route path="/labels" element={<Navigate to="/products" replace />} />
             <Route path="/history" element={protectedElement(<History />)} />
             <Route path="/stock" element={protectedElement(<Stock />)} />

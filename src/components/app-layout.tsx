@@ -8,9 +8,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { showSuccess } from "@/utils/toast";
 
 const navItems = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/", label: "Dasbor", icon: LayoutDashboard },
   { to: "/scan", label: "Scan QR", icon: QrCode },
-  { to: "/products", label: "Products", icon: Package2 },
+  { to: "/products", label: "Produk", icon: Package2 },
   { to: "/stock", label: "Ledger Stok", icon: ClipboardList },
 ];
 
@@ -31,8 +31,8 @@ export const AppLayout = ({ children, title, backTo }: AppLayoutProps) => {
       <div className="mx-auto flex max-w-7xl">
         <aside className="sticky top-0 hidden h-screen w-64 border-r bg-white p-4 md:flex md:flex-col">
           <div className="mb-8 rounded-2xl bg-emerald-500 p-4 text-white">
-            <p className="text-xs uppercase tracking-wider text-emerald-100">Operations</p>
-            <h1 className="text-xl font-semibold">Juice Inventory</h1>
+            <p className="text-xs uppercase tracking-wider text-emerald-100">Operasional</p>
+            <h1 className="text-xl font-semibold">Inventori Jus</h1>
           </div>
 
           <nav className="space-y-2">
@@ -72,14 +72,14 @@ export const AppLayout = ({ children, title, backTo }: AppLayoutProps) => {
             <div className="flex items-start gap-3">
               {backTo && (
                 <Button asChild variant="secondary" size="icon" className="mt-0.5 rounded-xl">
-                  <Link to={backTo} aria-label="Back">
+                  <Link to={backTo} aria-label="Kembali">
                     <ArrowLeft className="h-4 w-4" />
                   </Link>
                 </Button>
               )}
               <div>
                 <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
-                <p className="text-sm text-slate-500">Fast daily operations first, details second.</p>
+                <p className="text-sm text-slate-500">Operasional harian cepat, detail tetap rapi.</p>
               </div>
             </div>
 
