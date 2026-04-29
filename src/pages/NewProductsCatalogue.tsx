@@ -20,6 +20,7 @@ const NewProductsCatalogue = () => {
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
   const [unit, setUnit] = useState("Pcs");
   const [costPrice, setCostPrice] = useState("");
+  const [minStock, setMinStock] = useState("10");
   const [itemCode, setItemCode] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -54,6 +55,9 @@ const NewProductsCatalogue = () => {
   const saveCatalogue = async () => {
     if (!name.trim()) return showError("Nama wajib diisi");
 
+    const minStockNumber = Number(minStock || 0);
+    if (Number.isNaN(minStockNumber) || minStockNumber < 0) return showError("Minimum stok tidak valid");
+
     setIsSaving(true);
 
     const uploadedPhotoUrl = await uploadPhoto();
@@ -72,7 +76,7 @@ const NewProductsCatalogue = () => {
         name: name.trim(),
         sku: finalCode,
         unit: cleanUnit,
-        min_stock: 0,
+        min_stock: minStockNumber,
         category: cleanCategory,
         sell_price: sellPrice ? Number(sellPrice) : null,
         cost_price: costPrice ? Number(costPrice) : null,
@@ -92,7 +96,7 @@ const NewProductsCatalogue = () => {
       name: name.trim(),
       sku: finalCode,
       unit: cleanUnit,
-      min_stock: 0,
+      min_stock: minStockNumber,
       photo_url: uploadedPhotoUrl,
       is_active: true,
     });
@@ -176,6 +180,18 @@ const NewProductsCatalogue = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Minimum stok</Label>
+                <Input
+                  className="mt-1 h-12 rounded-2xl text-base"
+                  type="number"
+                  min={0}
+                  value={minStock}
+                  onChange={(e) => setMinStock(e.target.value)}
+                  placeholder="10"
+                />
               </div>
 
               <div className="sm:col-span-2">

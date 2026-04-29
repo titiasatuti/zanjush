@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
 import { useNavigate } from "react-router-dom";
 import { ImagePlus, PackagePlus, Save } from "lucide-react";
+import { logActivity } from "@/lib/activity-log";
 
 const units = [
   "Batang",
@@ -43,6 +44,7 @@ const NewIngredients = () => {
   const [category, setCategory] = useState("");
   const [unit, setUnit] = useState("pcs");
   const [currentStock, setCurrentStock] = useState("");
+  const [minStock, setMinStock] = useState("10");
   const [totalBuyPrice, setTotalBuyPrice] = useState("");
   const [notes, setNotes] = useState("");
   const [itemCode, setItemCode] = useState("");
@@ -93,6 +95,9 @@ const NewIngredients = () => {
     const stockNumber = Number(currentStock || 0);
     if (Number.isNaN(stockNumber) || stockNumber < 0) return showError("Stok saat ini tidak valid");
 
+    const minStockNumber = Number(minStock || 0);
+    if (Number.isNaN(minStockNumber) || minStockNumber < 0) return showError("Minimum stok tidak valid");
+
     const priceNumber = Number(totalBuyPrice || 0);
     if (Number.isNaN(priceNumber) || priceNumber < 0) return showError("Harga total beli tidak valid");
 
@@ -114,7 +119,7 @@ const NewIngredients = () => {
         name: name.trim(),
         sku: skuWithCategory,
         unit: unit.toLowerCase(),
-        min_stock: 0,
+        min_stock: minStockNumber,
         photo_url: uploadedPhotoUrl,
         is_active: true,
       })
@@ -147,6 +152,7 @@ const NewIngredients = () => {
       }
     }
 
+    await logActivity("create_ingredient", `Membuat bahan baku: ${name.trim()} (${finalCode})`);
     showSuccess("Bahan baku berhasil dibuat");
     navigate("/products/ingredients");
   };
@@ -211,6 +217,11 @@ const NewIngredients = () => {
               <div>
                 <Label className="text-sm font-semibold text-slate-700">Stok saat ini</Label>
                 <Input className="mt-1 h-12 rounded-2xl text-base" type="number" min={0} value={currentStock} onChange={(e) => setCurrentStock(e.target.value)} placeholder="0" />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Minimum stok</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" type="number" min={0} value={minStock} onChange={(e) => setMinStock(e.target.value)} placeholder="10" />
               </div>
 
               <div>
