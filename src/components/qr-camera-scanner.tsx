@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { BrowserQRCodeReader } from "@zxing/browser";
 
 type QrCameraScannerProps = {
   onDetected: (value: string) => void;
@@ -15,6 +16,8 @@ declare global {
   }
 }
 
+const zxingReader = new BrowserQRCodeReader();
+
 export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -24,12 +27,14 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
   const [isStarting, setIsStarting] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [errorText, setErrorText] = useState("");
+  const [engine, setEngine] = useState<"native" | "zxing" | null>(null);
 
   const stopScanner = () => {
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
+    zxingReader.stopContinuousDecode();
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -38,6 +43,7 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
       videoRef.current.srcObject = null;
     }
     setIsRunning(false);
+    setEngine(null);
   };
 
   const scanLoop = async () => {
@@ -59,23 +65,12 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
     rafRef.current = requestAnimationFrame(scanLoop);
   };
 
-  const startScanner = async () => {
-    setErrorText("");
-    setIsStarting(true);
-
-    if (!window.BarcodeDetector) {
-      setErrorText("Camera scanning is not supported in this browser. Use manual input below.");
-      setIsStarting(false);
-      return;
-    }
-
-    detectorRef.current = new window.BarcodeDetector({ formats: ["qr_code"] });
-
+  const startNativeScanner = async () => {
+    detectorRef.current = new window.BarcodeDetector!({ formats: ["qr_code"] });
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" } },
       audio: false,
     });
-
     streamRef.current = stream;
 
     if (videoRef.current) {
@@ -83,9 +78,50 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
       await videoRef.current.play();
     }
 
+    setEngine("native");
     setIsRunning(true);
-    setIsStarting(false);
     rafRef.current = requestAnimationFrame(scanLoop);
+  };
+
+  const startZxingScanner = async () => {
+    if (!videoRef.current) return;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } },
+      audio: false,
+    });
+    streamRef.current = stream;
+    videoRef.current.srcObject = stream;
+    await videoRef.current.play();
+
+    setEngine("zxing");
+    setIsRunning(true);
+
+    zxingReader.decodeFromVideoElementContinuously(videoRef.current, (result) => {
+      const text = result?.getText();
+      if (text && text.trim().length > 0) {
+        onDetected(text);
+        stopScanner();
+      }
+    });
+  };
+
+  const startScanner = async () => {
+    setErrorText("");
+    setIsStarting(true);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setErrorText("Camera is not available on this device/browser.");
+      setIsStarting(false);
+      return;
+    }
+
+    if (window.BarcodeDetector) {
+      await startNativeScanner();
+    } else {
+      await startZxingScanner();
+    }
+
+    setIsStarting(false);
   };
 
   useEffect(() => {
@@ -98,21 +134,19 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
     <div className="rounded-3xl border bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-sm font-medium text-slate-700">Camera Scanner</p>
-        <div className="flex gap-2">
-          {!isRunning ? (
-            <Button
-              onClick={startScanner}
-              disabled={isStarting}
-              className="rounded-xl bg-emerald-500 hover:bg-emerald-600"
-            >
-              {isStarting ? "Starting..." : "Start Camera"}
-            </Button>
-          ) : (
-            <Button onClick={stopScanner} variant="secondary" className="rounded-xl">
-              Stop Camera
-            </Button>
-          )}
-        </div>
+        {!isRunning ? (
+          <Button
+            onClick={startScanner}
+            disabled={isStarting}
+            className="rounded-xl bg-emerald-500 hover:bg-emerald-600"
+          >
+            {isStarting ? "Starting..." : "Start Camera"}
+          </Button>
+        ) : (
+          <Button onClick={stopScanner} variant="secondary" className="rounded-xl">
+            Stop Camera
+          </Button>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-2xl border bg-slate-100">
@@ -123,7 +157,9 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
         <p className="mt-3 text-sm text-rose-600">{errorText}</p>
       ) : (
         <p className="mt-3 text-xs text-slate-500">
-          Point camera at a QR label. Scan stops automatically when a code is found.
+          {isRunning
+            ? `Scanning with ${engine === "native" ? "native camera engine" : "fallback camera engine"}...`
+            : "Point camera at a QR label. Scan stops automatically when a code is found."}
         </p>
       )}
     </div>
