@@ -17,8 +17,11 @@ type LogAction =
   | "blocked_negative_stock";
 
 export const logActivity = async (action: LogAction, description: string) => {
+  const { data } = await supabase.auth.getUser();
+  const userEmail = data.user?.email || "pengguna tidak diketahui";
+
   await supabase.from("activity_logs").insert({
     action,
-    description,
+    description: `${description} • Oleh: ${userEmail}`,
   });
 };
