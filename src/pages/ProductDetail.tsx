@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { showError, showSuccess } from "@/utils/toast";
+import { PackageCheck, QrCode, Save, Trash2, Utensils } from "lucide-react";
 
 type Product = {
   id: string;
@@ -32,11 +33,17 @@ type ProductIngredient = {
   ingredient_name?: string;
 };
 
+type Movement = {
+  movement_type: string;
+  quantity: number;
+};
+
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [product, setProduct] = useState<Product | null>(null);
+  const [movements, setMovements] = useState<Movement[]>([]);
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [unit, setUnit] = useState("");
@@ -56,10 +63,28 @@ const ProductDetail = () => {
   const [labelPayload, setLabelPayload] = useState("");
   const [isGeneratingLabel, setIsGeneratingLabel] = useState(false);
 
+  const stockLeft = useMemo(() => {
+    return movements.reduce((sum, movement) => {
+      const sign = ["in", "return", "adjust"].includes(movement.movement_type) ? 1 : -1;
+      return sum + sign * movement.quantity;
+    }, 0);
+  }, [movements]);
+
   const qrUrl = useMemo(() => {
     if (!labelPayload) return "";
     return `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(labelPayload)}`;
   }, [labelPayload]);
+
+  const loadMovements = async () => {
+    if (!id) return;
+
+    const { data } = await supabase
+      .from("stock_movements")
+      .select("movement_type,quantity")
+      .eq("product_id", id);
+
+    setMovements((data as Movement[]) || []);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -82,6 +107,8 @@ const ProductDetail = () => {
         setSellPrice(data.sell_price?.toString() || "");
         setCostPrice(data.cost_price?.toString() || "");
       });
+
+    loadMovements();
   }, [id, navigate]);
 
   useEffect(() => {
@@ -125,6 +152,10 @@ const ProductDetail = () => {
 
   const saveChanges = async () => {
     if (!id) return;
+    if (!name.trim()) return showError("Nama produk wajib diisi");
+    if (!sku.trim()) return showError("SKU wajib diisi");
+    if (!unit.trim()) return showError("Satuan wajib diisi");
+
     setIsSaving(true);
     const { error } = await supabase
       .from("products")
@@ -201,28 +232,36 @@ const ProductDetail = () => {
     if (!id) return;
     const qty = Number(adjustQty);
     if (!qty || qty < 1) return showError("Qty harus lebih dari 0");
+
     const { error } = await supabase.from("stock_movements").insert({
       product_id: id,
       movement_type: "in",
       quantity: qty,
       note: "Manual stock adjustment from detail page",
     });
+
     if (error) return showError(error.message);
+
     showSuccess("Stok berhasil ditambah");
+    loadMovements();
   };
 
   const removeStock = async () => {
     if (!id) return;
     const qty = Number(adjustQty);
     if (!qty || qty < 1) return showError("Qty harus lebih dari 0");
+
     const { error } = await supabase.from("stock_movements").insert({
       product_id: id,
       movement_type: "out",
       quantity: qty,
       note: "Manual stock adjustment from detail page",
     });
+
     if (error) return showError(error.message);
+
     showSuccess("Stok berhasil dikurangi");
+    loadMovements();
   };
 
   const deleteItem = async () => {
@@ -235,101 +274,187 @@ const ProductDetail = () => {
 
   if (!product) {
     return (
-      <AppLayout title="Product Detail">
-        <p className="text-sm text-slate-500">Loading...</p>
+      <AppLayout title="Product Detail" backTo="/products/catalogue">
+        <div className="rounded-3xl border bg-white p-5 text-sm text-slate-500 shadow-sm">Loading...</div>
       </AppLayout>
     );
   }
 
   return (
-    <AppLayout title="Product Detail">
-      <div className="grid gap-3 rounded-2xl border bg-white p-4">
-        {product.photo_url && (
-          <img src={product.photo_url} alt={product.name} className="h-48 w-full rounded-2xl object-cover" />
-        )}
-        <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-        <div><Label>SKU</Label><Input value={sku} onChange={(e) => setSku(e.target.value)} /></div>
-        <div><Label>Unit</Label><Input value={unit} onChange={(e) => setUnit(e.target.value)} /></div>
-        <div><Label>Category</Label><Input value={category} onChange={(e) => setCategory(e.target.value)} /></div>
-        <div><Label>Harga Jual</Label><Input type="number" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} /></div>
-        <div><Label>Harga Modal</Label><Input type="number" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} /></div>
-        <Button className="rounded-xl bg-emerald-500 hover:bg-emerald-600" onClick={saveChanges} disabled={isSaving}>
-          {isSaving ? "Saving..." : "Simpan Perubahan"}
-        </Button>
-      </div>
-
-      <div className="mt-4 grid gap-3 rounded-2xl border bg-white p-4">
-        <p className="text-sm font-semibold text-slate-800">Label Produk</p>
-        <Button className="rounded-xl bg-violet-500 hover:bg-violet-600" onClick={generateLabel} disabled={isGeneratingLabel}>
-          {isGeneratingLabel ? "Generating..." : "Generate Label 512x512"}
-        </Button>
-        {labelPayload && (
-          <div className="rounded-2xl border bg-slate-50 p-4">
-            <div className="mx-auto flex w-full max-w-[540px] flex-col items-center gap-3 rounded-2xl bg-white p-4">
-              <img src={qrUrl} alt="QR Label" className="h-[256px] w-[256px] rounded-xl border sm:h-[320px] sm:w-[320px]" />
-              <p className="text-center text-base font-semibold text-slate-800">{product.name}</p>
-              <p className="text-center text-xs text-slate-500">Template print 512x512</p>
+    <AppLayout title="Product Detail" backTo="/products/catalogue">
+      <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
+        <div className="space-y-4">
+          <section className="rounded-3xl border bg-white p-4 shadow-sm sm:p-6">
+            <div className="mb-5 flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                <PackageCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Informasi Produk</h3>
+                <p className="text-sm text-slate-500">Ubah data utama, harga, kategori, dan kode produk.</p>
+              </div>
             </div>
-            <Button variant="secondary" className="mt-3 rounded-xl" onClick={printLabel}>
-              Print Label
-            </Button>
-          </div>
-        )}
-      </div>
 
-      <div className="mt-4 grid gap-3 rounded-2xl border bg-white p-4">
-        <p className="text-sm font-semibold text-slate-800">Komposisi Bahan Baku per 1 Produk</p>
-        <div className="grid gap-2 sm:grid-cols-4">
-          <select
-            className="h-10 w-full rounded-md border px-3 text-sm sm:col-span-2"
-            value={selectedIngredientId}
-            onChange={(e) => {
-              const value = e.target.value;
-              setSelectedIngredientId(value);
-              const found = ingredientOptions.find((opt) => opt.id === value);
-              if (found) setUnitLabel(found.unit);
-            }}
-          >
-            <option value="">Pilih bahan baku</option>
-            {ingredientOptions.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.name}
-              </option>
-            ))}
-          </select>
-          <Input type="number" min={0.0001} step="0.0001" value={qtyPerUnit} onChange={(e) => setQtyPerUnit(e.target.value)} placeholder="Qty" />
-          <Input value={unitLabel} onChange={(e) => setUnitLabel(e.target.value)} placeholder="Satuan (contoh: buah, tbsp, ml)" />
-        </div>
-        <Button className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-600 sm:w-auto" onClick={addRecipeIngredient} disabled={isAddingIngredient}>
-          {isAddingIngredient ? "Menambahkan..." : "Tambah Bahan ke Produk"}
-        </Button>
+            {product.photo_url && (
+              <img src={product.photo_url} alt={product.name} className="mb-5 h-56 w-full rounded-3xl object-cover" />
+            )}
 
-        <div className="space-y-2">
-          {recipeRows.length ? (
-            recipeRows.map((row) => (
-              <div key={row.id} className="flex items-center justify-between rounded-xl border bg-slate-50 px-3 py-2 text-sm">
-                <p className="font-medium text-slate-800">
-                  {row.qty_per_unit} {row.unit_label || ""} {row.ingredient_name}
-                </p>
-                <Button variant="destructive" size="sm" className="rounded-lg" onClick={() => removeRecipeIngredient(row.id)}>
-                  Hapus
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label className="text-sm font-semibold text-slate-700">Nama produk</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">SKU</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" value={sku} onChange={(e) => setSku(e.target.value)} />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Satuan</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" value={unit} onChange={(e) => setUnit(e.target.value)} />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Kategori</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" value={category} onChange={(e) => setCategory(e.target.value)} />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Harga jual</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" type="number" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Harga modal</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" type="number" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} />
+              </div>
+
+              <Button className="h-12 rounded-2xl bg-emerald-500 text-base hover:bg-emerald-600 sm:col-span-2" onClick={saveChanges} disabled={isSaving}>
+                <Save className="mr-2 h-4 w-4" />
+                {isSaving ? "Menyimpan..." : "Simpan Perubahan"}
+              </Button>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border bg-white p-4 shadow-sm sm:p-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Adjust Stok</h3>
+                <p className="text-sm text-slate-500">Tambah atau kurangi stok produk.</p>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 px-4 py-2 text-right">
+                <p className="text-xs font-medium text-emerald-700">Stok tersisa</p>
+                <p className="text-2xl font-bold text-emerald-800">{stockLeft}</p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Jumlah</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" type="number" min={1} value={adjustQty} onChange={(e) => setAdjustQty(e.target.value)} />
+              </div>
+              <div className="flex items-end gap-2">
+                <Button className="h-12 flex-1 rounded-2xl bg-emerald-500 hover:bg-emerald-600 sm:flex-none" onClick={addStock}>
+                  Tambah
+                </Button>
+                <Button variant="secondary" className="h-12 flex-1 rounded-2xl sm:flex-none" onClick={removeStock}>
+                  Kurangi
                 </Button>
               </div>
-            ))
-          ) : (
-            <p className="text-sm text-slate-500">Belum ada komposisi bahan baku untuk produk ini.</p>
-          )}
-        </div>
-      </div>
+            </div>
 
-      <div className="mt-4 grid gap-3 rounded-2xl border bg-white p-4">
-        <Label>Adjust Stok</Label>
-        <Input type="number" min={1} value={adjustQty} onChange={(e) => setAdjustQty(e.target.value)} />
-        <div className="flex flex-wrap gap-2">
-          <Button className="rounded-xl bg-emerald-500 hover:bg-emerald-600" onClick={addStock}>Tambah Stok</Button>
-          <Button variant="secondary" className="rounded-xl" onClick={removeStock}>Kurangi Stok</Button>
-          <Button variant="destructive" className="rounded-xl" onClick={deleteItem}>Hapus Item</Button>
+            <Button variant="destructive" className="mt-4 h-11 rounded-2xl" onClick={deleteItem}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Hapus Produk
+            </Button>
+          </section>
+
+          <section className="rounded-3xl border bg-white p-4 shadow-sm sm:p-6">
+            <div className="mb-5 flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                <Utensils className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Komposisi Bahan Baku</h3>
+                <p className="text-sm text-slate-500">Atur bahan yang dipakai untuk membuat 1 produk.</p>
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-4">
+              <select
+                className="h-12 w-full rounded-2xl border px-4 text-base sm:col-span-2"
+                value={selectedIngredientId}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSelectedIngredientId(value);
+                  const found = ingredientOptions.find((opt) => opt.id === value);
+                  if (found) setUnitLabel(found.unit);
+                }}
+              >
+                <option value="">Pilih bahan baku</option>
+                {ingredientOptions.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.name}
+                  </option>
+                ))}
+              </select>
+              <Input className="h-12 rounded-2xl text-base" type="number" min={0.0001} step="0.0001" value={qtyPerUnit} onChange={(e) => setQtyPerUnit(e.target.value)} placeholder="Qty" />
+              <Input className="h-12 rounded-2xl text-base" value={unitLabel} onChange={(e) => setUnitLabel(e.target.value)} placeholder="Satuan" />
+            </div>
+
+            <Button className="mt-3 h-12 w-full rounded-2xl bg-emerald-500 hover:bg-emerald-600 sm:w-auto" onClick={addRecipeIngredient} disabled={isAddingIngredient}>
+              {isAddingIngredient ? "Menambahkan..." : "Tambah Bahan ke Produk"}
+            </Button>
+
+            <div className="mt-4 space-y-2">
+              {recipeRows.length ? (
+                recipeRows.map((row) => (
+                  <div key={row.id} className="flex flex-col gap-3 rounded-2xl border bg-slate-50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                    <p className="font-medium text-slate-800">
+                      {row.qty_per_unit} {row.unit_label || ""} {row.ingredient_name}
+                    </p>
+                    <Button variant="destructive" size="sm" className="rounded-xl" onClick={() => removeRecipeIngredient(row.id)}>
+                      Hapus
+                    </Button>
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">Belum ada komposisi bahan baku untuk produk ini.</p>
+              )}
+            </div>
+          </section>
         </div>
+
+        <aside className="space-y-4">
+          <section className="rounded-3xl border bg-white p-4 shadow-sm sm:p-6">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
+                <QrCode className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Label QR</h3>
+                <p className="text-sm text-slate-500">Buat label aman untuk scan stok.</p>
+              </div>
+            </div>
+
+            <Button className="h-12 w-full rounded-2xl bg-violet-500 text-base hover:bg-violet-600" onClick={generateLabel} disabled={isGeneratingLabel}>
+              {isGeneratingLabel ? "Generating..." : "Generate Label 512x512"}
+            </Button>
+
+            {labelPayload && (
+              <div className="mt-4 rounded-3xl border bg-slate-50 p-4">
+                <div className="mx-auto flex aspect-square w-full max-w-[512px] flex-col items-center justify-center gap-3 rounded-3xl bg-white p-5">
+                  <img src={qrUrl} alt="QR Label" className="h-64 w-64 rounded-2xl border object-contain" />
+                  <p className="text-center text-lg font-bold text-slate-900">{product.name}</p>
+                </div>
+                <Button variant="secondary" className="mt-3 h-11 w-full rounded-2xl" onClick={printLabel}>
+                  Print Label
+                </Button>
+              </div>
+            )}
+          </section>
+        </aside>
       </div>
     </AppLayout>
   );

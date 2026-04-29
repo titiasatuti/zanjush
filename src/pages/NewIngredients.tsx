@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
 import { useNavigate } from "react-router-dom";
+import { ImagePlus, PackagePlus, Save } from "lucide-react";
 
 const units = [
   "Batang",
@@ -152,71 +153,93 @@ const NewIngredients = () => {
 
   return (
     <AppLayout title="New Ingredient" backTo="/products/ingredients">
-      <div className="grid gap-3 rounded-2xl border bg-white p-4">
-        <div>
-          <Label>Foto</Label>
-          <Input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} />
-        </div>
+      <div className="mx-auto max-w-4xl space-y-4">
+        <section className="rounded-3xl border bg-white p-4 shadow-sm sm:p-6">
+          <div className="mb-5 flex items-start gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+              <PackagePlus className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900">Tambah Bahan Baku</h3>
+              <p className="text-sm text-slate-500">Isi data utama bahan baku agar mudah dicari dan dihitung stoknya.</p>
+            </div>
+          </div>
 
-        <div>
-          <Label>Nama bahan baku</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
+          <div className="grid gap-5">
+            <div className="rounded-3xl border border-dashed bg-slate-50 p-4">
+              <Label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <ImagePlus className="h-4 w-4" />
+                Foto bahan baku
+              </Label>
+              <Input className="h-12 rounded-2xl bg-white text-base" type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} />
+              <p className="mt-2 text-xs text-slate-500">Opsional, tetapi membantu pengguna mengenali bahan lebih cepat.</p>
+            </div>
 
-        <div>
-          <Label>Kategori bahan baku</Label>
-          <Input
-            list="ingredient-categories"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="Ketik kategori baru atau pilih yang sudah ada"
-          />
-          <datalist id="ingredient-categories">
-            {existingCategories.map((cat) => (
-              <option key={cat} value={cat} />
-            ))}
-          </datalist>
-        </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label className="text-sm font-semibold text-slate-700">Nama bahan baku</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" value={name} onChange={(e) => setName(e.target.value)} placeholder="Contoh: Gula pasir" />
+              </div>
 
-        <div>
-          <Label>Satuan bahan baku</Label>
-          <select className="h-10 w-full rounded-md border px-3 text-sm" value={unit} onChange={(e) => setUnit(e.target.value)}>
-            {units.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-        </div>
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Kategori</Label>
+                <Input
+                  className="mt-1 h-12 rounded-2xl text-base"
+                  list="ingredient-categories"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  placeholder="Contoh: Bahan kering"
+                />
+                <datalist id="ingredient-categories">
+                  {existingCategories.map((cat) => (
+                    <option key={cat} value={cat} />
+                  ))}
+                </datalist>
+              </div>
 
-        <div>
-          <Label>Stok saat ini</Label>
-          <Input type="number" min={0} value={currentStock} onChange={(e) => setCurrentStock(e.target.value)} />
-        </div>
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Satuan</Label>
+                <select className="mt-1 h-12 w-full rounded-2xl border px-4 text-base" value={unit} onChange={(e) => setUnit(e.target.value)}>
+                  {units.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-        <div>
-          <Label>Harga total beli bahan baku</Label>
-          <Input type="number" min={0} value={totalBuyPrice} onChange={(e) => setTotalBuyPrice(e.target.value)} />
-        </div>
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Stok saat ini</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" type="number" min={0} value={currentStock} onChange={(e) => setCurrentStock(e.target.value)} placeholder="0" />
+              </div>
 
-        <div>
-          <Label>Catatan Bahan Baku (Optional)</Label>
-          <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </div>
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Harga total beli</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" type="number" min={0} value={totalBuyPrice} onChange={(e) => setTotalBuyPrice(e.target.value)} placeholder="0" />
+              </div>
 
-        <div>
-          <Label>Kode Bahan Baku</Label>
-          <div className="flex gap-2">
-            <Input value={itemCode} onChange={(e) => setItemCode(e.target.value)} placeholder="Masukkan kode atau generate" />
-            <Button type="button" variant="secondary" className="rounded-xl" onClick={() => setItemCode(generateCode(name || "INGREDIENT"))}>
-              Generate
+              <div className="sm:col-span-2">
+                <Label className="text-sm font-semibold text-slate-700">Catatan bahan baku</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opsional, contoh: Supplier atau kualitas bahan" />
+              </div>
+
+              <div className="sm:col-span-2">
+                <Label className="text-sm font-semibold text-slate-700">Kode bahan baku</Label>
+                <div className="mt-1 flex flex-col gap-2 sm:flex-row">
+                  <Input className="h-12 rounded-2xl text-base" value={itemCode} onChange={(e) => setItemCode(e.target.value)} placeholder="Kosongkan untuk generate otomatis" />
+                  <Button type="button" variant="secondary" className="h-12 rounded-2xl px-5" onClick={() => setItemCode(generateCode(name || "INGREDIENT"))}>
+                    Generate
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <Button className="h-13 rounded-2xl bg-emerald-500 py-6 text-base font-semibold hover:bg-emerald-600" onClick={save} disabled={isSaving}>
+              <Save className="mr-2 h-5 w-5" />
+              {isSaving ? "Menyimpan..." : "Simpan Bahan Baku"}
             </Button>
           </div>
-        </div>
-
-        <Button className="rounded-xl bg-emerald-500 hover:bg-emerald-600" onClick={save} disabled={isSaving}>
-          {isSaving ? "Saving..." : "Simpan Bahan Baku"}
-        </Button>
+        </section>
       </div>
     </AppLayout>
   );
