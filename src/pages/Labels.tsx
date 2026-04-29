@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { showError, showSuccess } from "@/utils/toast";
 
-const token = () => crypto.randomUUID().replaceAll("-", "");
+const token = () => crypto.randomUUID().replace(/-/g, "");
 
 const Labels = () => {
   const [items, setItems] = useState<any[]>([]);
