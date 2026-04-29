@@ -16,9 +16,17 @@ Aplikasi ini adalah frontend Vite, jadi hasil build akan berupa file statis di f
 
 ### 2. Build Command
 
-Isi **Build Command** dengan:
+Jika Render memakai **pnpm** atau muncul error `ERR_PNPM_OUTDATED_LOCKFILE`, isi **Build Command** dengan:
+
+pnpm install --no-frozen-lockfile && pnpm run build
+
+Jika Render memakai **npm**, gunakan:
 
 npm install && npm run build
+
+Rekomendasi untuk error yang Anda alami:
+
+pnpm install --no-frozen-lockfile && pnpm run build
 
 ### 3. Publish Directory
 
@@ -31,6 +39,10 @@ dist
 Untuk **Static Site**, Render tidak membutuhkan start command.
 
 Jika Render meminta start command karena Anda memilih tipe **Web Service**, gunakan:
+
+pnpm run preview -- --host 0.0.0.0 --port $PORT
+
+Atau jika memakai npm:
 
 npm run preview -- --host 0.0.0.0 --port $PORT
 
@@ -99,9 +111,9 @@ using (bucket_id = 'item-photos');
 
 ## Ringkasan command
 
-Build Command:
+Build Command yang direkomendasikan untuk Render jika muncul error pnpm lockfile:
 
-npm install && npm run build
+pnpm install --no-frozen-lockfile && pnpm run build
 
 Publish Directory:
 
@@ -113,4 +125,4 @@ Tidak perlu
 
 Start Command jika memakai Web Service:
 
-npm run preview -- --host 0.0.0.0 --port $PORT
+pnpm run preview -- --host 0.0.0.0 --port $PORT
