@@ -82,7 +82,7 @@ const NewProductsCatalogue = () => {
   };
 
   return (
-    <AppLayout title="New Catalogue">
+    <AppLayout title="New Catalogue" backTo="/products/catalogue">
       <div className="grid gap-3 rounded-2xl border bg-white p-4">
         <div>
           <Label>Image</Label>

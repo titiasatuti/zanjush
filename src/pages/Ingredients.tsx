@@ -68,7 +68,7 @@ const Ingredients = () => {
   }, [ingredients]);
 
   return (
-    <AppLayout title="Atur Bahan Baku">
+    <AppLayout title="Atur Bahan Baku" backTo="/products">
       <div className="mb-4">
         <Button asChild className="rounded-xl bg-emerald-500 hover:bg-emerald-600">
           <Link to="/products/ingredients/new">+ New Ingredient</Link>

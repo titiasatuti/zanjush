@@ -1,8 +1,9 @@
 import { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Package2, QrCode, Tags } from "lucide-react";
+import { NavLink, Link } from "react-router-dom";
+import { LayoutDashboard, Package2, QrCode, Tags, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BottomNav } from "@/components/bottom-nav";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -11,7 +12,13 @@ const navItems = [
   { to: "/labels", label: "Labels", icon: Tags },
 ];
 
-export const AppLayout = ({ children, title }: { children: ReactNode; title: string }) => {
+type AppLayoutProps = {
+  children: ReactNode;
+  title: string;
+  backTo?: string;
+};
+
+export const AppLayout = ({ children, title, backTo }: AppLayoutProps) => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto flex max-w-7xl">
@@ -42,9 +49,18 @@ export const AppLayout = ({ children, title }: { children: ReactNode; title: str
           </nav>
         </aside>
         <main className="w-full p-4 pb-24 md:p-8 md:pb-8">
-          <header className="mb-6">
-            <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
-            <p className="text-sm text-slate-500">Fast daily operations first, details second.</p>
+          <header className="mb-6 flex items-start gap-3">
+            {backTo && (
+              <Button asChild variant="secondary" size="icon" className="mt-0.5 rounded-xl">
+                <Link to={backTo} aria-label="Back">
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
+            )}
+            <div>
+              <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
+              <p className="text-sm text-slate-500">Fast daily operations first, details second.</p>
+            </div>
           </header>
           {children}
         </main>

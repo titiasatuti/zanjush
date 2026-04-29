@@ -61,7 +61,7 @@ const ProductsCatalogue = () => {
   }, [products]);
 
   return (
-    <AppLayout title="Catalogue">
+    <AppLayout title="Catalogue" backTo="/products">
       <div className="mb-4">
         <Button asChild className="rounded-xl bg-emerald-500 hover:bg-emerald-600">
           <Link to="/products/catalougue/new">Create New Catalogue</Link>

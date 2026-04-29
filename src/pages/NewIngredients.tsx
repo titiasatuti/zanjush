@@ -164,7 +164,7 @@ const NewIngredients = () => {
   };
 
   return (
-    <AppLayout title="New Ingredient">
+    <AppLayout title="New Ingredient" backTo="/products/ingredients">
       <div className="grid gap-3 rounded-2xl border bg-white p-4">
         <div>
           <Label>Foto</Label>
