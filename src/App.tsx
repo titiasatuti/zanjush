@@ -71,8 +71,8 @@ const App = () => {
             <Route path="/products" element={protectedElement(<Products />)} />
             <Route path="/products/catalogue" element={protectedElement(<ProductsCatalogue />)} />
             <Route path="/products/catalogue/:id" element={protectedElement(<ProductDetail />)} />
-            <Route path="/products/catalougue/new" element={protectedElement(<NewProductsCatalogue />)} />
-            <Route path="/products/catalogue/new" element={<Navigate to="/products/catalougue/new" replace />} />
+            <Route path="/products/catalogue/new" element={protectedElement(<NewProductsCatalogue />)} />
+            <Route path="/products/catalougue/new" element={<Navigate to="/products/catalogue/new" replace />} />
             <Route path="/products/ingredients" element={protectedElement(<Ingredients />)} />
             <Route path="/products/ingredients/:id" element={protectedElement(<IngredientDetail />)} />
             <Route path="/products/ingredients/new" element={protectedElement(<NewIngredients />)} />

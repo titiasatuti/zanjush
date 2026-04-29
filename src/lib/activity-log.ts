@@ -11,7 +11,10 @@ type LogAction =
   | "stock_out"
   | "create_label"
   | "add_recipe_ingredient"
-  | "remove_recipe_ingredient";
+  | "remove_recipe_ingredient"
+  | "scan_stock_in"
+  | "scan_stock_out"
+  | "blocked_negative_stock";
 
 export const logActivity = async (action: LogAction, description: string) => {
   await supabase.from("activity_logs").insert({

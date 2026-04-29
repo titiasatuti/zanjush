@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { showError, showSuccess } from "@/utils/toast";
 import { PackageCheck, QrCode, Save, Trash2 } from "lucide-react";
+import { canReduceStock } from "@/lib/stock-utils";
+import { logActivity } from "@/lib/activity-log";
 
 type Ingredient = {
   id: string;
@@ -106,6 +108,7 @@ const IngredientDetail = () => {
     setIsSaving(false);
 
     if (error) return showError(error.message);
+    await logActivity("update_ingredient", `Mengubah bahan baku: ${name.trim()}`);
     showSuccess("Perubahan bahan baku disimpan");
   };
 
@@ -130,6 +133,7 @@ const IngredientDetail = () => {
 
     if (error) return showError(error.message);
     setLabelPayload(securePayload);
+    await logActivity("create_label", `Membuat label QR bahan baku: ${ingredient.name}`);
     showSuccess("Label bahan baku berhasil dibuat");
   };
 
@@ -149,6 +153,7 @@ const IngredientDetail = () => {
 
     if (error) return showError(error.message);
 
+    await logActivity("stock_in", `Menambah stok bahan baku ${name} sebanyak ${qty}`);
     showSuccess("Stok bahan baku berhasil ditambah");
     loadMovements();
   };
@@ -157,6 +162,12 @@ const IngredientDetail = () => {
     if (!id) return;
     const qty = Number(adjustQty);
     if (!qty || qty < 1) return showError("Qty harus lebih dari 0");
+
+    const stockCheck = await canReduceStock(id, qty);
+    if (!stockCheck.allowed) {
+      await logActivity("blocked_negative_stock", `Pengurangan bahan baku ${name} ditolak: stok ${stockCheck.currentStock}, diminta ${qty}`);
+      return showError(`Stok tidak cukup. Stok tersedia: ${stockCheck.currentStock}`);
+    }
 
     const { error } = await supabase.from("stock_movements").insert({
       product_id: id,
@@ -167,6 +178,7 @@ const IngredientDetail = () => {
 
     if (error) return showError(error.message);
 
+    await logActivity("stock_out", `Mengurangi stok bahan baku ${name} sebanyak ${qty}`);
     showSuccess("Stok bahan baku berhasil dikurangi");
     loadMovements();
   };
@@ -177,6 +189,7 @@ const IngredientDetail = () => {
     const { error } = await supabase.from("items").update({ is_active: false }).eq("id", id);
     if (error) return showError(error.message);
 
+    await logActivity("delete_ingredient", `Menghapus bahan baku: ${name}`);
     showSuccess("Bahan baku dihapus");
     navigate("/products/ingredients");
   };

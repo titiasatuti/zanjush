@@ -63,21 +63,43 @@ const NewProductsCatalogue = () => {
     }
 
     const finalCode = itemCode.trim() || generateCode(name);
+    const cleanUnit = unit.toLowerCase();
+    const cleanCategory = category.trim() || "Tanpa Kategori";
 
-    const { error } = await supabase.from("products").insert({
+    const { data: insertedProduct, error } = await supabase
+      .from("products")
+      .insert({
+        name: name.trim(),
+        sku: finalCode,
+        unit: cleanUnit,
+        min_stock: 0,
+        category: cleanCategory,
+        sell_price: sellPrice ? Number(sellPrice) : null,
+        cost_price: costPrice ? Number(costPrice) : null,
+        photo_url: uploadedPhotoUrl,
+      })
+      .select("id")
+      .single();
+
+    if (error || !insertedProduct) {
+      setIsSaving(false);
+      return showError(error?.message || "Gagal menyimpan produk");
+    }
+
+    const { error: itemError } = await supabase.from("items").insert({
+      id: insertedProduct.id,
+      type: "product",
       name: name.trim(),
       sku: finalCode,
-      unit: unit.toLowerCase(),
+      unit: cleanUnit,
       min_stock: 0,
-      category: category.trim() || "Tanpa Kategori",
-      sell_price: sellPrice ? Number(sellPrice) : null,
-      cost_price: costPrice ? Number(costPrice) : null,
       photo_url: uploadedPhotoUrl,
+      is_active: true,
     });
 
-    if (error) {
+    if (itemError) {
       setIsSaving(false);
-      return showError(error.message);
+      return showError(itemError.message);
     }
 
     await logActivity("create_product", `Membuat produk: ${name} (${finalCode})`);

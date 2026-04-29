@@ -70,7 +70,7 @@ const ProductsCatalogue = () => {
     <AppLayout title="Produk" backTo="/products">
       <div className="mb-4">
         <Button asChild className="rounded-xl bg-emerald-500 hover:bg-emerald-600">
-          <Link to="/products/catalougue/new">Buat Produk Baru</Link>
+          <Link to="/products/catalogue/new">Buat Produk Baru</Link>
         </Button>
       </div>
 

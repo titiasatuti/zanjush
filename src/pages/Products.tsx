@@ -15,7 +15,7 @@ const Products = () => {
                 <Package2 className="h-6 w-6" />
               </div>
               <Button asChild size="sm" className="rounded-xl bg-emerald-500 hover:bg-emerald-600">
-                <Link to="/products/catalougue/new">
+                <Link to="/products/catalogue/new">
                   <Plus className="mr-1 h-4 w-4" />
                   Produk Baru
                 </Link>

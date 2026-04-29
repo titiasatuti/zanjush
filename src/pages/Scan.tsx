@@ -6,6 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
 import { QrCameraScanner } from "@/components/qr-camera-scanner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { canReduceStock, readItemStock } from "@/lib/stock-utils";
+import { logActivity } from "@/lib/activity-log";
 
 type ResolvedItem = {
   id: string;
@@ -24,18 +26,6 @@ const Scan = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const safeQty = useMemo(() => (qty > 0 ? qty : 1), [qty]);
-
-  const readStock = async (itemId: string) => {
-    const { data } = await supabase
-      .from("stock_movements")
-      .select("movement_type,quantity")
-      .eq("product_id", itemId);
-
-    return (data || []).reduce((sum, row) => {
-      const sign = ["in", "return", "adjust"].includes(row.movement_type) ? 1 : -1;
-      return sum + sign * row.quantity;
-    }, 0);
-  };
 
   const resolveToken = async (rawPayload: string) => {
     const token = rawPayload.startsWith("v1:") ? rawPayload.replace("v1:", "") : rawPayload;
@@ -58,7 +48,7 @@ const Scan = () => {
         .eq("id", batch.product_id)
         .eq("type", "ingredient")
         .maybeSingle(),
-      readStock(batch.product_id),
+      readItemStock(batch.product_id),
     ]);
 
     if (productRes.data) {
@@ -105,6 +95,20 @@ const Scan = () => {
 
   const postMovement = async (type: "in" | "out") => {
     if (!resolved) return;
+
+    if (type === "out") {
+      const stockCheck = await canReduceStock(resolved.id, safeQty);
+      if (!stockCheck.allowed) {
+        await logActivity(
+          "blocked_negative_stock",
+          `Scan ditolak: ${resolved.name} stok ${stockCheck.currentStock}, diminta keluar ${safeQty}`,
+        );
+        showError(`Stok tidak cukup. Stok tersedia: ${stockCheck.currentStock}`);
+        setResolved({ ...resolved, stock: stockCheck.currentStock });
+        return;
+      }
+    }
+
     const { error } = await supabase.from("stock_movements").insert({
       product_id: resolved.id,
       batch_id: resolved.batchId,
@@ -117,6 +121,10 @@ const Scan = () => {
 
     const newStock = type === "in" ? resolved.stock + safeQty : resolved.stock - safeQty;
     setResolved({ ...resolved, stock: newStock });
+    await logActivity(
+      type === "in" ? "scan_stock_in" : "scan_stock_out",
+      `Scan ${type === "in" ? "tambah" : "kurangi"} stok ${resolved.name} sebanyak ${safeQty}`,
+    );
     showSuccess("Stock updated");
   };
 
