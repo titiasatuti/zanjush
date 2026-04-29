@@ -104,23 +104,44 @@ const NewIngredients = () => {
     const finalCode = itemCode.trim() || generateCode(name);
     const skuWithCategory = `[CAT:${category}] ${finalCode}`;
 
-    const { error: insertItemError } = await supabase.from("items").insert({
-      type: "ingredient",
-      name: name.trim(),
-      sku: skuWithCategory,
-      unit: unit.toLowerCase(),
-      min_stock: 0,
-      photo_url: uploadedPhotoUrl,
-      is_active: true,
-    });
+    const { data: insertedItem, error: insertItemError } = await supabase
+      .from("items")
+      .insert({
+        type: "ingredient",
+        name: name.trim(),
+        sku: skuWithCategory,
+        unit: unit.toLowerCase(),
+        min_stock: 0,
+        photo_url: uploadedPhotoUrl,
+        is_active: true,
+      })
+      .select("id")
+      .single();
 
-    if (insertItemError) {
+    if (insertItemError || !insertedItem) {
       setIsSaving(false);
-      return showError(insertItemError.message || "Gagal menyimpan bahan baku");
+      return showError(insertItemError?.message || "Gagal menyimpan bahan baku");
     }
 
     if (stockNumber > 0 || priceNumber > 0 || notes.trim()) {
-      showError("Data bahan baku tersimpan, namun pencatatan stok awal akan diaktifkan setelah login/auth disiapkan.");
+      const movementNote = [
+        notes.trim() ? notes.trim() : null,
+        priceNumber > 0 ? `Harga total beli: ${priceNumber}` : null,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+
+      const { error: movementError } = await supabase.from("stock_movements").insert({
+        product_id: insertedItem.id,
+        movement_type: "in",
+        quantity: stockNumber > 0 ? stockNumber : 0,
+        note: movementNote || null,
+      });
+
+      if (movementError) {
+        setIsSaving(false);
+        return showError(movementError.message);
+      }
     }
 
     showSuccess("Bahan baku berhasil dibuat");

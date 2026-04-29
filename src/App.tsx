@@ -1,8 +1,11 @@
+import { useEffect, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Products from "./pages/Products";
@@ -12,31 +15,71 @@ import ProductsCatalogue from "./pages/ProductsCatalogue";
 import NewProductsCatalogue from "./pages/NewProductsCatalogue";
 import Ingredients from "./pages/Ingredients";
 import NewIngredients from "./pages/NewIngredients";
+import Login from "./pages/Login";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/products/catalogue" element={<ProductsCatalogue />} />
-          <Route path="/products/catalougue/new" element={<NewProductsCatalogue />} />
-          <Route path="/products/catalogue/new" element={<Navigate to="/products/catalougue/new" replace />} />
-          <Route path="/products/ingredients" element={<Ingredients />} />
-          <Route path="/products/ingredients/new" element={<NewIngredients />} />
-          <Route path="/scan" element={<Scan />} />
-          <Route path="/labels" element={<Labels />} />
-          <Route path="/stock" element={<Navigate to="/products/catalogue" replace />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  const [session, setSession] = useState<Session | null>(null);
+  const [isSessionReady, setIsSessionReady] = useState(false);
+
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
+      setSession(newSession);
+
+      if (event === "INITIAL_SESSION") {
+        setIsSessionReady(true);
+      }
+
+      if (event === "SIGNED_OUT") {
+        setSession(null);
+      }
+    });
+
+    supabase.auth.getSession().then(({ data: sessionData }) => {
+      setSession(sessionData.session);
+      setIsSessionReady(true);
+    });
+
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  if (!isSessionReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">Loading session...</div>
+      </div>
+    );
+  }
+
+  const isAuthenticated = !!session;
+
+  const protectedElement = (element: JSX.Element) => (isAuthenticated ? element : <Navigate to="/login" replace />);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login isAuthenticated={isAuthenticated} />} />
+            <Route path="/" element={protectedElement(<Index />)} />
+            <Route path="/products" element={protectedElement(<Products />)} />
+            <Route path="/products/catalogue" element={protectedElement(<ProductsCatalogue />)} />
+            <Route path="/products/catalougue/new" element={protectedElement(<NewProductsCatalogue />)} />
+            <Route path="/products/catalogue/new" element={<Navigate to="/products/catalougue/new" replace />} />
+            <Route path="/products/ingredients" element={protectedElement(<Ingredients />)} />
+            <Route path="/products/ingredients/new" element={protectedElement(<NewIngredients />)} />
+            <Route path="/scan" element={protectedElement(<Scan />)} />
+            <Route path="/labels" element={protectedElement(<Labels />)} />
+            <Route path="/stock" element={<Navigate to="/products/catalogue" replace />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
