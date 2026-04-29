@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
 import { useNavigate } from "react-router-dom";
+import { logActivity } from "@/lib/activity-log";
 
 const generateCode = (name: string) =>
   `BRG-${name.replace(/\s+/g, "-").toUpperCase().slice(0, 8)}-${Math.floor(Math.random() * 999)}`;
@@ -77,6 +78,7 @@ const NewProductsCatalogue = () => {
       return showError(error.message);
     }
 
+    await logActivity("create_product", `Membuat produk: ${name} (${finalCode})`);
     showSuccess("Produk berhasil disimpan");
     navigate("/products/catalogue");
   };

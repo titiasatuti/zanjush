@@ -1,7 +1,7 @@
 import { AppLayout } from "@/components/app-layout";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package2, Plus, CookingPot, FileBarChart2 } from "lucide-react";
+import { Package2, Plus, CookingPot, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Products = () => {
@@ -45,17 +45,19 @@ const Products = () => {
           </Card>
         </Link>
 
-        <Card className="rounded-3xl border-slate-200 opacity-90">
-          <CardHeader>
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
-              <FileBarChart2 className="h-6 w-6" />
-            </div>
-            <CardTitle>Lihat Laporan</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-slate-600">Ringkasan dan laporan akan kita kerjakan setelah bahan baku selesai.</p>
-          </CardContent>
-        </Card>
+        <Link to="/history">
+          <Card className="h-full rounded-3xl border-sky-200 transition hover:border-sky-300 hover:shadow-sm">
+            <CardHeader>
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+                <History className="h-6 w-6" />
+              </div>
+              <CardTitle>Histori</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-slate-600">Lihat riwayat aktivitas seperti tambah, update, hapus, dan pergerakan stok.</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </AppLayout>
   );

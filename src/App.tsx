@@ -18,6 +18,7 @@ import NewIngredients from "./pages/NewIngredients";
 import Login from "./pages/Login";
 import ProductDetail from "./pages/ProductDetail";
 import IngredientDetail from "./pages/IngredientDetail";
+import History from "./pages/History";
 
 const queryClient = new QueryClient();
 
@@ -77,6 +78,7 @@ const App = () => {
             <Route path="/products/ingredients/new" element={protectedElement(<NewIngredients />)} />
             <Route path="/scan" element={protectedElement(<Scan />)} />
             <Route path="/labels" element={protectedElement(<Labels />)} />
+            <Route path="/history" element={protectedElement(<History />)} />
             <Route path="/stock" element={<Navigate to="/products/catalogue" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
