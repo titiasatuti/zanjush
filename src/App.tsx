@@ -10,6 +10,8 @@ import Scan from "./pages/Scan";
 import Labels from "./pages/Labels";
 import ProductsCatalogue from "./pages/ProductsCatalogue";
 import NewProductsCatalogue from "./pages/NewProductsCatalogue";
+import Ingredients from "./pages/Ingredients";
+import NewIngredients from "./pages/NewIngredients";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +27,8 @@ const App = () => (
           <Route path="/products/catalogue" element={<ProductsCatalogue />} />
           <Route path="/products/catalougue/new" element={<NewProductsCatalogue />} />
           <Route path="/products/catalogue/new" element={<Navigate to="/products/catalougue/new" replace />} />
+          <Route path="/products/ingredients" element={<Ingredients />} />
+          <Route path="/products/ingredients/new" element={<NewIngredients />} />
           <Route path="/scan" element={<Scan />} />
           <Route path="/labels" element={<Labels />} />
           <Route path="/stock" element={<Navigate to="/products/catalogue" replace />} />
