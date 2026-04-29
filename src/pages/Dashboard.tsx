@@ -85,7 +85,7 @@ const Dashboard = () => {
 
         <Card className="rounded-2xl">
           <CardHeader>
-            <CardTitle className="text-sm">Low Stock (< 10)</CardTitle>
+            <CardTitle className="text-sm">Low Stock (under 10)</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{lowStock.length}</CardContent>
         </Card>
