@@ -86,19 +86,18 @@ export const saveBrandingSettings = async (settings: BrandingSettings) => {
     logo_url: settings.logo_url || null,
   };
 
+  localStorage.setItem(fallbackStorageKey, JSON.stringify(normalizedSettings));
+
   const { error } = await supabase.from("app_settings").upsert({
     id: "default",
     ...normalizedSettings,
     updated_at: new Date().toISOString(),
   });
 
-  localStorage.setItem(fallbackStorageKey, JSON.stringify(normalizedSettings));
-
-  if (error) {
-    throw error;
-  }
-
   window.dispatchEvent(new CustomEvent("branding-updated", { detail: normalizedSettings }));
 
-  return normalizedSettings;
+  return {
+    settings: normalizedSettings,
+    databaseError: error?.message || "",
+  };
 };

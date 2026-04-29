@@ -51,7 +51,8 @@ const SettingsPage = () => {
     });
 
     if (uploadError) {
-      throw uploadError;
+      showError(uploadError.message);
+      return "";
     }
 
     const { data } = supabase.storage.from("item-photos").getPublicUrl(filePath);
@@ -89,14 +90,25 @@ const SettingsPage = () => {
     setIsSavingBranding(true);
 
     const logoUrl = await uploadLogo();
-    const saved = await saveBrandingSettings({
+    if (logoFile && !logoUrl) {
+      setIsSavingBranding(false);
+      return;
+    }
+
+    const result = await saveBrandingSettings({
       ...branding,
       logo_url: logoUrl || null,
     });
 
-    setBranding(saved);
+    setBranding(result.settings);
     setLogoFile(null);
     setIsSavingBranding(false);
+
+    if (result.databaseError) {
+      showError(`Branding tersimpan lokal, tetapi belum tersimpan ke database: ${result.databaseError}`);
+      return;
+    }
+
     showSuccess("Branding dashboard berhasil disimpan");
   };
 
