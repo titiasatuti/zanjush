@@ -9,6 +9,7 @@ import { showError, showSuccess } from "@/utils/toast";
 import { PackageCheck, QrCode, Save, Trash2 } from "lucide-react";
 import { canReduceStock } from "@/lib/stock-utils";
 import { logActivity } from "@/lib/activity-log";
+import { DetailPhotoUploadButton } from "@/components/detail-photo-upload-button";
 
 type Ingredient = {
   id: string;
@@ -100,6 +101,10 @@ const IngredientDetail = () => {
     load();
     loadMovements();
   }, [id, navigate]);
+
+  const updateIngredientPhoto = (photoUrl: string) => {
+    setIngredient((current) => (current ? { ...current, photo_url: photoUrl } : current));
+  };
 
   const saveChanges = async () => {
     if (!id) return;
@@ -211,7 +216,7 @@ const IngredientDetail = () => {
     navigate("/products/ingredients");
   };
 
-  if (!ingredient) {
+  if (!ingredient || !id) {
     return (
       <AppLayout title="Detail Bahan Baku" backTo="/products/ingredients">
         <div className="rounded-3xl border bg-white p-5 text-sm text-slate-500 shadow-sm">Memuat data bahan baku...</div>
@@ -234,8 +239,27 @@ const IngredientDetail = () => {
               </div>
             </div>
 
-            {ingredient.photo_url && (
-              <img src={ingredient.photo_url} alt={ingredient.name} className="mb-5 h-56 w-full rounded-3xl object-cover" />
+            {ingredient.photo_url ? (
+              <div className="relative mb-5">
+                <img src={ingredient.photo_url} alt={ingredient.name} className="h-56 w-full rounded-3xl object-cover" />
+                <DetailPhotoUploadButton
+                  itemId={id}
+                  itemType="ingredient"
+                  title={ingredient.name}
+                  onUploaded={updateIngredientPhoto}
+                  className="absolute bottom-3 right-3"
+                />
+              </div>
+            ) : (
+              <div className="mb-5">
+                <DetailPhotoUploadButton
+                  itemId={id}
+                  itemType="ingredient"
+                  title={name || "bahan baku"}
+                  variant="full"
+                  onUploaded={updateIngredientPhoto}
+                />
+              </div>
             )}
 
             <div className="grid gap-4">

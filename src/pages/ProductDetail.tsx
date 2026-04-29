@@ -9,6 +9,7 @@ import { showError, showSuccess } from "@/utils/toast";
 import { PackageCheck, QrCode, Save, Trash2, Utensils, X } from "lucide-react";
 import { canReduceStock } from "@/lib/stock-utils";
 import { logActivity } from "@/lib/activity-log";
+import { DetailPhotoUploadButton } from "@/components/detail-photo-upload-button";
 
 type Product = {
   id: string;
@@ -164,6 +165,10 @@ const ProductDetail = () => {
   useEffect(() => {
     loadRecipe();
   }, [id, ingredientOptions.length]);
+
+  const updateProductPhoto = (photoUrl: string) => {
+    setProduct((current) => (current ? { ...current, photo_url: photoUrl } : current));
+  };
 
   const saveChanges = async () => {
     if (!id || !product) return;
@@ -343,7 +348,7 @@ const ProductDetail = () => {
     navigate("/products/catalogue");
   };
 
-  if (!product) {
+  if (!product || !id) {
     return (
       <AppLayout title="Detail Produk" backTo="/products/catalogue">
         <div className="rounded-3xl border bg-white p-5 text-sm text-slate-500 shadow-sm">Memuat data produk...</div>
@@ -366,8 +371,27 @@ const ProductDetail = () => {
               </div>
             </div>
 
-            {product.photo_url && (
-              <img src={product.photo_url} alt={product.name} className="mb-5 h-56 w-full rounded-3xl object-cover" />
+            {product.photo_url ? (
+              <div className="relative mb-5">
+                <img src={product.photo_url} alt={product.name} className="h-56 w-full rounded-3xl object-cover" />
+                <DetailPhotoUploadButton
+                  itemId={id}
+                  itemType="product"
+                  title={product.name}
+                  onUploaded={updateProductPhoto}
+                  className="absolute bottom-3 right-3"
+                />
+              </div>
+            ) : (
+              <div className="mb-5">
+                <DetailPhotoUploadButton
+                  itemId={id}
+                  itemType="product"
+                  title={name || "produk"}
+                  variant="full"
+                  onUploaded={updateProductPhoto}
+                />
+              </div>
             )}
 
             <div className="grid gap-4 sm:grid-cols-2">
