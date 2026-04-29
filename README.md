@@ -1,13 +1,74 @@
-# Welcome to your Dyad app
+# Inventory App
 
-## Supabase Storage setup for product photo uploads
+Aplikasi inventori berbasis React, TypeScript, Vite, Tailwind CSS, shadcn/ui, dan Supabase.
 
-If product photo upload returns `400` on `/storage/v1/object/item-photos/...`, configure Storage policies for the `item-photos` bucket.
+## Menjalankan di Render.com
 
-Run these SQL statements in Supabase SQL Editor:
+Gunakan konfigurasi berikut saat membuat service baru di Render.com.
 
-```sql
--- Allow public (anon) upload while app has no auth
+### 1. Pilih tipe service
+
+Pilih:
+
+- **Static Site**
+
+Aplikasi ini adalah frontend Vite, jadi hasil build akan berupa file statis di folder `dist`.
+
+### 2. Build Command
+
+Isi **Build Command** dengan:
+
+npm install && npm run build
+
+### 3. Publish Directory
+
+Isi **Publish Directory** dengan:
+
+dist
+
+### 4. Start Command
+
+Untuk **Static Site**, Render tidak membutuhkan start command.
+
+Jika Render meminta start command karena Anda memilih tipe **Web Service**, gunakan:
+
+npm run preview -- --host 0.0.0.0 --port $PORT
+
+Namun rekomendasi utama untuk project ini adalah memakai **Static Site**, bukan Web Service.
+
+### 5. Environment Variables
+
+Project ini sudah memakai Supabase URL dan publishable key langsung di:
+
+src/integrations/supabase/client.ts
+
+Jadi tidak wajib menambahkan environment variable untuk menjalankan aplikasi saat ini.
+
+### 6. Routing SPA
+
+Project ini sudah memiliki file `vercel.json`, tetapi untuk Render Static Site Anda perlu menambahkan rewrite rule di dashboard Render agar React Router berjalan saat refresh halaman.
+
+Tambahkan rewrite:
+
+Source:
+
+/*
+
+Destination:
+
+/index.html
+
+Action:
+
+Rewrite
+
+## Supabase Storage setup untuk upload foto produk
+
+Jika upload foto produk mengembalikan error `400` pada `/storage/v1/object/item-photos/...`, pastikan bucket `item-photos` sudah ada dan policy storage sudah sesuai.
+
+Jalankan SQL berikut di Supabase SQL Editor:
+
+-- Allow public upload while app has no storage-specific auth policy
 create policy "item_photos_public_insert"
 on storage.objects
 for insert
@@ -21,7 +82,7 @@ for select
 to public
 using (bucket_id = 'item-photos');
 
--- Optional: allow public update (if needed later)
+-- Optional: allow public update
 create policy "item_photos_public_update"
 on storage.objects
 for update
@@ -29,12 +90,27 @@ to public
 using (bucket_id = 'item-photos')
 with check (bucket_id = 'item-photos');
 
--- Optional: allow public delete (if needed later)
+-- Optional: allow public delete
 create policy "item_photos_public_delete"
 on storage.objects
 for delete
 to public
 using (bucket_id = 'item-photos');
-```
 
-Also ensure bucket `item-photos` exists.
+## Ringkasan command
+
+Build Command:
+
+npm install && npm run build
+
+Publish Directory:
+
+dist
+
+Start Command untuk Static Site:
+
+Tidak perlu
+
+Start Command jika memakai Web Service:
+
+npm run preview -- --host 0.0.0.0 --port $PORT
