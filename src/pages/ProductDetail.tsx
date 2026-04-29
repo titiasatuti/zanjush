@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { showError, showSuccess } from "@/utils/toast";
-import { PackageCheck, QrCode, Save, Trash2, Utensils } from "lucide-react";
+import { PackageCheck, QrCode, Save, Trash2, Utensils, X } from "lucide-react";
 
 type Product = {
   id: string;
@@ -381,26 +381,48 @@ const ProductDetail = () => {
               </div>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-4">
-              <select
-                className="h-12 w-full rounded-2xl border px-4 text-base sm:col-span-2"
-                value={selectedIngredientId}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setSelectedIngredientId(value);
-                  const found = ingredientOptions.find((opt) => opt.id === value);
-                  if (found) setUnitLabel(found.unit);
-                }}
-              >
-                <option value="">Pilih bahan baku</option>
-                {ingredientOptions.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.name}
-                  </option>
-                ))}
-              </select>
-              <Input className="h-12 rounded-2xl text-base" type="number" min={0.0001} step="0.0001" value={qtyPerUnit} onChange={(e) => setQtyPerUnit(e.target.value)} placeholder="Qty" />
-              <Input className="h-12 rounded-2xl text-base" value={unitLabel} onChange={(e) => setUnitLabel(e.target.value)} placeholder="Satuan" />
+            <div className="grid gap-3">
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Pilih bahan baku</Label>
+                <select
+                  className="mt-1 h-12 w-full rounded-2xl border px-4 text-base"
+                  value={selectedIngredientId}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSelectedIngredientId(value);
+                    const found = ingredientOptions.find((opt) => opt.id === value);
+                    if (found) setUnitLabel(found.unit);
+                  }}
+                >
+                  <option value="">Pilih bahan baku</option>
+                  {ingredientOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Jumlah per produk</Label>
+                <div className="mt-1 flex overflow-hidden rounded-2xl border bg-white">
+                  <Input
+                    className="h-12 rounded-none border-0 text-base focus-visible:ring-0"
+                    type="number"
+                    min={0.0001}
+                    step="0.0001"
+                    value={qtyPerUnit}
+                    onChange={(e) => setQtyPerUnit(e.target.value)}
+                    placeholder="Qty"
+                  />
+                  <Input
+                    className="h-12 w-28 rounded-none border-0 border-l bg-slate-50 text-base focus-visible:ring-0 sm:w-36"
+                    value={unitLabel}
+                    onChange={(e) => setUnitLabel(e.target.value)}
+                    placeholder="Satuan"
+                  />
+                </div>
+              </div>
             </div>
 
             <Button className="mt-3 h-12 w-full rounded-2xl bg-emerald-500 hover:bg-emerald-600 sm:w-auto" onClick={addRecipeIngredient} disabled={isAddingIngredient}>
@@ -410,12 +432,22 @@ const ProductDetail = () => {
             <div className="mt-4 space-y-2">
               {recipeRows.length ? (
                 recipeRows.map((row) => (
-                  <div key={row.id} className="flex flex-col gap-3 rounded-2xl border bg-slate-50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-                    <p className="font-medium text-slate-800">
-                      {row.qty_per_unit} {row.unit_label || ""} {row.ingredient_name}
-                    </p>
-                    <Button variant="destructive" size="sm" className="rounded-xl" onClick={() => removeRecipeIngredient(row.id)}>
-                      Hapus
+                  <div key={row.id} className="flex items-center justify-between gap-3 rounded-2xl border bg-slate-50 px-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-slate-900">{row.ingredient_name}</p>
+                      <p className="mt-0.5 text-xs font-medium text-slate-500">
+                        {row.qty_per_unit} {row.unit_label || ""} per produk
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 rounded-full text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                      onClick={() => removeRecipeIngredient(row.id)}
+                      aria-label={`Hapus ${row.ingredient_name}`}
+                    >
+                      <X className="h-5 w-5" />
                     </Button>
                   </div>
                 ))
