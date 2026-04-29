@@ -21,6 +21,7 @@ import IngredientDetail from "./pages/IngredientDetail";
 import History from "./pages/History";
 import Stock from "./pages/Stock";
 import PrintLabel from "./pages/PrintLabel";
+import SettingsPage from "./pages/Settings";
 
 const queryClient = new QueryClient();
 
@@ -83,6 +84,7 @@ const App = () => {
             <Route path="/labels" element={<Navigate to="/products" replace />} />
             <Route path="/history" element={protectedElement(<History />)} />
             <Route path="/stock" element={protectedElement(<Stock />)} />
+            <Route path="/pengaturan" element={protectedElement(<SettingsPage />)} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

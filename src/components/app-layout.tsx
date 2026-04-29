@@ -1,17 +1,19 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { NavLink, Link } from "react-router-dom";
-import { LayoutDashboard, Package2, QrCode, ArrowLeft, ClipboardList, LogOut } from "lucide-react";
+import { LayoutDashboard, Package2, QrCode, ArrowLeft, ClipboardList, LogOut, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BottomNav } from "@/components/bottom-nav";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { showSuccess } from "@/utils/toast";
+import { BrandingSettings, defaultBranding, getBrandingIcon, loadBrandingSettings } from "@/lib/branding";
 
 const navItems = [
   { to: "/", label: "Dasbor", icon: LayoutDashboard },
   { to: "/scan", label: "Scan QR", icon: QrCode },
   { to: "/products", label: "Produk", icon: Package2 },
   { to: "/stock", label: "Ledger Stok", icon: ClipboardList },
+  { to: "/pengaturan", label: "Pengaturan", icon: Settings },
 ];
 
 type AppLayoutProps = {
@@ -21,6 +23,22 @@ type AppLayoutProps = {
 };
 
 export const AppLayout = ({ children, title, backTo }: AppLayoutProps) => {
+  const [branding, setBranding] = useState<BrandingSettings>(defaultBranding);
+
+  useEffect(() => {
+    loadBrandingSettings().then(setBranding);
+
+    const updateBranding = (event: Event) => {
+      const customEvent = event as CustomEvent<BrandingSettings>;
+      setBranding(customEvent.detail);
+    };
+
+    window.addEventListener("branding-updated", updateBranding);
+    return () => window.removeEventListener("branding-updated", updateBranding);
+  }, []);
+
+  const BrandIcon = getBrandingIcon(branding.icon_name);
+
   const signOut = async () => {
     await supabase.auth.signOut();
     showSuccess("Berhasil logout");
@@ -31,8 +49,19 @@ export const AppLayout = ({ children, title, backTo }: AppLayoutProps) => {
       <div className="mx-auto flex max-w-7xl">
         <aside className="sticky top-0 hidden h-screen w-64 border-r bg-white p-4 md:flex md:flex-col">
           <div className="mb-8 rounded-2xl bg-emerald-500 p-4 text-white">
-            <p className="text-xs uppercase tracking-wider text-emerald-100">Operasional</p>
-            <h1 className="text-xl font-semibold">Inventori Jus</h1>
+            {branding.logo_url ? (
+              <img src={branding.logo_url} alt="Logo dashboard" className="h-16 w-full rounded-xl object-contain" />
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/20">
+                  <BrandIcon className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs uppercase tracking-wider text-emerald-100">Operasional</p>
+                  <h1 className="truncate text-xl font-semibold">{branding.dashboard_name}</h1>
+                </div>
+              </div>
+            )}
           </div>
 
           <nav className="space-y-2">
