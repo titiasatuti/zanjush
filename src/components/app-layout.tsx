@@ -1,15 +1,14 @@
 import { ReactNode } from "react";
 import { NavLink, Link } from "react-router-dom";
-import { LayoutDashboard, Package2, QrCode, Tags, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, Package2, QrCode, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BottomNav } from "@/components/bottom-nav";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/products", label: "Products", icon: Package2 },
   { to: "/scan", label: "Scan QR", icon: QrCode },
-  { to: "/labels", label: "Labels", icon: Tags },
+  { to: "/products", label: "Products", icon: Package2 },
 ];
 
 type AppLayoutProps = {

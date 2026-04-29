@@ -10,7 +10,6 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Products from "./pages/Products";
 import Scan from "./pages/Scan";
-import Labels from "./pages/Labels";
 import ProductsCatalogue from "./pages/ProductsCatalogue";
 import NewProductsCatalogue from "./pages/NewProductsCatalogue";
 import Ingredients from "./pages/Ingredients";
@@ -77,7 +76,7 @@ const App = () => {
             <Route path="/products/ingredients/:id" element={protectedElement(<IngredientDetail />)} />
             <Route path="/products/ingredients/new" element={protectedElement(<NewIngredients />)} />
             <Route path="/scan" element={protectedElement(<Scan />)} />
-            <Route path="/labels" element={protectedElement(<Labels />)} />
+            <Route path="/labels" element={<Navigate to="/products" replace />} />
             <Route path="/history" element={protectedElement(<History />)} />
             <Route path="/stock" element={<Navigate to="/products/catalogue" replace />} />
             <Route path="*" element={<NotFound />} />
