@@ -104,51 +104,23 @@ const NewIngredients = () => {
     const finalCode = itemCode.trim() || generateCode(name);
     const skuWithCategory = `[CAT:${category}] ${finalCode}`;
 
-    const { data: inserted, error: insertItemError } = await supabase
-      .from("items")
-      .insert({
-        type: "ingredient",
-        name: name.trim(),
-        sku: skuWithCategory,
-        unit: unit.toLowerCase(),
-        min_stock: 0,
-        photo_url: uploadedPhotoUrl,
-        is_active: true,
-      })
-      .select("id")
-      .single();
+    const { error: insertItemError } = await supabase.from("items").insert({
+      type: "ingredient",
+      name: name.trim(),
+      sku: skuWithCategory,
+      unit: unit.toLowerCase(),
+      min_stock: 0,
+      photo_url: uploadedPhotoUrl,
+      is_active: true,
+    });
 
-    if (insertItemError || !inserted) {
+    if (insertItemError) {
       setIsSaving(false);
-      return showError(insertItemError?.message || "Gagal menyimpan bahan baku");
+      return showError(insertItemError.message || "Gagal menyimpan bahan baku");
     }
 
-    if (stockNumber > 0) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        showError("Bahan baku tersimpan, tapi stok awal belum dicatat karena belum login.");
-      } else {
-        const noteParts = [
-          `Ingredient ID: ${inserted.id}`,
-          `Harga total beli: ${priceNumber}`,
-          notes.trim() ? `Catatan: ${notes.trim()}` : "",
-        ].filter(Boolean);
-
-        const { error: stockError } = await supabase.from("stock_movements").insert({
-          product_id: inserted.id,
-          movement_type: "in",
-          quantity: stockNumber,
-          note: noteParts.join(" | "),
-        });
-
-        if (stockError) {
-          setIsSaving(false);
-          return showError(stockError.message);
-        }
-      }
+    if (stockNumber > 0 || priceNumber > 0 || notes.trim()) {
+      showError("Data bahan baku tersimpan, namun pencatatan stok awal akan diaktifkan setelah login/auth disiapkan.");
     }
 
     showSuccess("Bahan baku berhasil dibuat");
