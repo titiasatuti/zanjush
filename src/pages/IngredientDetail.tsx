@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { AppLayout } from "@/components/app-layout";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,16 @@ const IngredientDetail = () => {
     if (!labelPayload) return "";
     return `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(labelPayload)}`;
   }, [labelPayload]);
+
+  const printLabelPath = useMemo(() => {
+    const params = new URLSearchParams({
+      name: ingredient?.name || name || "Bahan Baku",
+      payload: labelPayload,
+      type: "Bahan Baku",
+    });
+
+    return `/print-label?${params.toString()}`;
+  }, [ingredient?.name, labelPayload, name]);
 
   const loadMovements = async () => {
     if (!id) return;
@@ -146,18 +156,16 @@ const IngredientDetail = () => {
     showSuccess("Label bahan baku berhasil dibuat");
   };
 
-  const printLabel = () => window.print();
-
   const addStock = async () => {
     if (!id) return;
     const qty = Number(adjustQty);
-    if (!qty || qty < 1) return showError("Qty harus lebih dari 0");
+    if (!qty || qty < 1) return showError("Jumlah harus lebih dari 0");
 
     const { error } = await supabase.from("stock_movements").insert({
       product_id: id,
       movement_type: "in",
       quantity: qty,
-      note: "Manual stock adjustment from ingredient detail page",
+      note: "Penyesuaian stok manual dari halaman detail bahan baku",
     });
 
     if (error) return showError(error.message);
@@ -170,7 +178,7 @@ const IngredientDetail = () => {
   const removeStock = async () => {
     if (!id) return;
     const qty = Number(adjustQty);
-    if (!qty || qty < 1) return showError("Qty harus lebih dari 0");
+    if (!qty || qty < 1) return showError("Jumlah harus lebih dari 0");
 
     const stockCheck = await canReduceStock(id, qty);
     if (!stockCheck.allowed) {
@@ -182,7 +190,7 @@ const IngredientDetail = () => {
       product_id: id,
       movement_type: "out",
       quantity: qty,
-      note: "Manual stock adjustment from ingredient detail page",
+      note: "Penyesuaian stok manual dari halaman detail bahan baku",
     });
 
     if (error) return showError(error.message);
@@ -205,14 +213,14 @@ const IngredientDetail = () => {
 
   if (!ingredient) {
     return (
-      <AppLayout title="Detail Ingredient" backTo="/products/ingredients">
-        <div className="rounded-3xl border bg-white p-5 text-sm text-slate-500 shadow-sm">Loading...</div>
+      <AppLayout title="Detail Bahan Baku" backTo="/products/ingredients">
+        <div className="rounded-3xl border bg-white p-5 text-sm text-slate-500 shadow-sm">Memuat data bahan baku...</div>
       </AppLayout>
     );
   }
 
   return (
-    <AppLayout title="Detail Ingredient" backTo="/products/ingredients">
+    <AppLayout title="Detail Bahan Baku" backTo="/products/ingredients">
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         <div className="space-y-4">
           <section className="rounded-3xl border bg-white p-4 shadow-sm sm:p-6">
@@ -261,7 +269,7 @@ const IngredientDetail = () => {
           <section className="rounded-3xl border bg-white p-4 shadow-sm sm:p-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Adjust Stok</h3>
+                <h3 className="text-lg font-semibold text-slate-900">Atur Stok</h3>
                 <p className="text-sm text-slate-500">Tambah atau kurangi stok bahan baku.</p>
               </div>
               <div className="rounded-2xl bg-emerald-50 px-4 py-2 text-right">
@@ -305,17 +313,17 @@ const IngredientDetail = () => {
             </div>
 
             <Button className="h-12 w-full rounded-2xl bg-violet-500 text-base hover:bg-violet-600" onClick={generateLabel} disabled={isGeneratingLabel}>
-              {isGeneratingLabel ? "Generating..." : "Generate Label 512x512"}
+              {isGeneratingLabel ? "Membuat..." : "Buat Label 512x512"}
             </Button>
 
             {labelPayload && (
               <div className="mt-4 rounded-3xl border bg-slate-50 p-4">
                 <div className="mx-auto flex aspect-square w-full max-w-[512px] flex-col items-center justify-center gap-3 rounded-3xl bg-white p-5">
-                  <img src={qrUrl} alt="QR Label" className="h-64 w-64 rounded-2xl border object-contain" />
+                  <img src={qrUrl} alt="Label QR" className="h-64 w-64 rounded-2xl border object-contain" />
                   <p className="text-center text-lg font-bold text-slate-900">{ingredient.name}</p>
                 </div>
-                <Button variant="secondary" className="mt-3 h-11 w-full rounded-2xl" onClick={printLabel}>
-                  Print Label
+                <Button asChild variant="secondary" className="mt-3 h-11 w-full rounded-2xl">
+                  <Link to={printLabelPath}>Buka Halaman Cetak</Link>
                 </Button>
               </div>
             )}

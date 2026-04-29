@@ -21,15 +21,20 @@ type Movement = {
 
 const readCategoryFromSku = (sku: string) => {
   const match = sku.match(/\[CAT:(.*?)\]/);
-  return match?.[1]?.trim() || "Uncategorized";
+  return match?.[1]?.trim() || "Tanpa Kategori";
 };
 
 const Ingredients = () => {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorText, setErrorText] = useState("");
 
   useEffect(() => {
     const load = async () => {
+      setIsLoading(true);
+      setErrorText("");
+
       const [itemsRes, movementsRes] = await Promise.all([
         supabase
           .from("items")
@@ -40,8 +45,15 @@ const Ingredients = () => {
         supabase.from("stock_movements").select("product_id,movement_type,quantity,note"),
       ]);
 
+      if (itemsRes.error || movementsRes.error) {
+        setErrorText(itemsRes.error?.message || movementsRes.error?.message || "Gagal memuat bahan baku");
+        setIsLoading(false);
+        return;
+      }
+
       setIngredients((itemsRes.data as Ingredient[]) || []);
       setMovements((movementsRes.data as Movement[]) || []);
+      setIsLoading(false);
     };
 
     load();
@@ -71,48 +83,54 @@ const Ingredients = () => {
     <AppLayout title="Atur Bahan Baku" backTo="/products">
       <div className="mb-4">
         <Button asChild className="rounded-xl bg-emerald-500 hover:bg-emerald-600">
-          <Link to="/products/ingredients/new">+ New Ingredient</Link>
+          <Link to="/products/ingredients/new">Tambah Bahan Baku</Link>
         </Button>
       </div>
 
-      <div className="space-y-6">
-        {grouped.map(([category, items]) => (
-          <section key={category} className="space-y-3">
-            <div className="flex items-center justify-between rounded-2xl bg-amber-50 px-4 py-2">
-              <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">{category}</p>
-              <p className="text-xs text-amber-700/80">{items.length} item(s)</p>
-            </div>
+      {isLoading ? (
+        <div className="rounded-3xl border bg-white p-5 text-sm text-slate-500 shadow-sm">Memuat daftar bahan baku...</div>
+      ) : errorText ? (
+        <div className="rounded-3xl border border-rose-100 bg-rose-50 p-5 text-sm font-medium text-rose-700 shadow-sm">{errorText}</div>
+      ) : (
+        <div className="space-y-6">
+          {grouped.map(([category, items]) => (
+            <section key={category} className="space-y-3">
+              <div className="flex items-center justify-between rounded-2xl bg-amber-50 px-4 py-2">
+                <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">{category}</p>
+                <p className="text-xs text-amber-700/80">{items.length} item</p>
+              </div>
 
-            <div className="space-y-3">
-              {items.map((item) => (
-                <Link key={item.id} to={`/products/ingredients/${item.id}`} className="block rounded-3xl border bg-white p-3 shadow-sm transition hover:shadow-md">
-                  <div className="flex items-start gap-3 sm:gap-4">
-                    <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
-                      {item.photo_url ? (
-                        <img src={item.photo_url} alt={item.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs font-medium text-slate-400">
-                          No Image
+              <div className="space-y-3">
+                {items.map((item) => (
+                  <Link key={item.id} to={`/products/ingredients/${item.id}`} className="block rounded-3xl border bg-white p-3 shadow-sm transition hover:shadow-md">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
+                        {item.photo_url ? (
+                          <img src={item.photo_url} alt={item.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs font-medium text-slate-400">
+                            Tidak Ada Gambar
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 text-right">
+                        <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">{item.name}</p>
+                        <div className="mt-2 flex flex-wrap justify-end gap-2 text-xs text-slate-600">
+                          <span className="rounded-full bg-slate-100 px-3 py-1">Stok: {stockByItem.get(item.id) || 0}</span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1">{item.unit}</span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1">{item.sku.replace(/\[CAT:.*?\]\s?/g, "")}</span>
                         </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1 text-right">
-                      <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">{item.name}</p>
-                      <div className="mt-2 flex flex-wrap justify-end gap-2 text-xs text-slate-600">
-                        <span className="rounded-full bg-slate-100 px-3 py-1">Stok: {stockByItem.get(item.id) || 0}</span>
-                        <span className="rounded-full bg-slate-100 px-3 py-1">{item.unit}</span>
-                        <span className="rounded-full bg-slate-100 px-3 py-1">{item.sku.replace(/\[CAT:.*?\]\s?/g, "")}</span>
                       </div>
                     </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        ))}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ))}
 
-        {!ingredients.length && <p className="text-sm text-slate-500">Belum ada bahan baku. Tambahkan bahan baku pertama.</p>}
-      </div>
+          {!ingredients.length && <p className="text-sm text-slate-500">Belum ada bahan baku. Tambahkan bahan baku pertama.</p>}
+        </div>
+      )}
     </AppLayout>
   );
 };

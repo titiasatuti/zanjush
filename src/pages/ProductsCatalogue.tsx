@@ -25,9 +25,14 @@ const isIngredientMirror = (sku: string) => sku.includes("[CAT:") || sku.include
 const ProductsCatalogue = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorText, setErrorText] = useState("");
 
   useEffect(() => {
     const load = async () => {
+      setIsLoading(true);
+      setErrorText("");
+
       const [productsRes, movementsRes] = await Promise.all([
         supabase
           .from("products")
@@ -36,11 +41,18 @@ const ProductsCatalogue = () => {
         supabase.from("stock_movements").select("product_id,movement_type,quantity"),
       ]);
 
+      if (productsRes.error || movementsRes.error) {
+        setErrorText(productsRes.error?.message || movementsRes.error?.message || "Gagal memuat produk");
+        setIsLoading(false);
+        return;
+      }
+
       const allProducts = (productsRes.data as Product[]) || [];
       const catalogueOnly = allProducts.filter((p) => !isIngredientMirror(p.sku) && p.category !== "Diarsipkan");
 
       setProducts(catalogueOnly);
       setMovements((movementsRes.data as Movement[]) || []);
+      setIsLoading(false);
     };
     load();
   }, []);
@@ -74,50 +86,56 @@ const ProductsCatalogue = () => {
         </Button>
       </div>
 
-      <div className="space-y-6">
-        {productsByCategory.map(([category, categoryProducts]) => (
-          <section key={category} className="space-y-3">
-            <div className="flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-2">
-              <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">{category}</p>
-              <p className="text-xs text-emerald-700/80">{categoryProducts.length} item</p>
-            </div>
+      {isLoading ? (
+        <div className="rounded-3xl border bg-white p-5 text-sm text-slate-500 shadow-sm">Memuat daftar produk...</div>
+      ) : errorText ? (
+        <div className="rounded-3xl border border-rose-100 bg-rose-50 p-5 text-sm font-medium text-rose-700 shadow-sm">{errorText}</div>
+      ) : (
+        <div className="space-y-6">
+          {productsByCategory.map(([category, categoryProducts]) => (
+            <section key={category} className="space-y-3">
+              <div className="flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-2">
+                <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">{category}</p>
+                <p className="text-xs text-emerald-700/80">{categoryProducts.length} item</p>
+              </div>
 
-            <div className="space-y-3">
-              {categoryProducts.map((p) => (
-                <Link key={p.id} to={`/products/catalogue/${p.id}`} className="block rounded-3xl border bg-white p-3 shadow-sm transition hover:shadow-md">
-                  <div className="flex items-start gap-3 sm:gap-4">
-                    <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
-                      {p.photo_url ? (
-                        <img src={p.photo_url} alt={p.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs font-medium text-slate-400">
-                          Tidak Ada Gambar
+              <div className="space-y-3">
+                {categoryProducts.map((p) => (
+                  <Link key={p.id} to={`/products/catalogue/${p.id}`} className="block rounded-3xl border bg-white p-3 shadow-sm transition hover:shadow-md">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
+                        {p.photo_url ? (
+                          <img src={p.photo_url} alt={p.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs font-medium text-slate-400">
+                            Tidak Ada Gambar
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1 text-right">
+                        <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">{p.name}</p>
+                        <p className="mt-1 text-sm font-medium text-emerald-700">
+                          {typeof p.sell_price === "number" ? `Rp ${p.sell_price.toLocaleString()}` : "Harga belum diatur"}
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap justify-end gap-2 text-xs text-slate-600">
+                          <span className="rounded-full bg-slate-100 px-3 py-1">Total Penjualan: -</span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1">Stok: {stockByProduct.get(p.id) || 0}</span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1">{p.unit}</span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1">{p.sku}</span>
                         </div>
-                      )}
-                    </div>
-
-                    <div className="min-w-0 flex-1 text-right">
-                      <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">{p.name}</p>
-                      <p className="mt-1 text-sm font-medium text-emerald-700">
-                        {typeof p.sell_price === "number" ? `Rp ${p.sell_price.toLocaleString()}` : "Harga belum diatur"}
-                      </p>
-
-                      <div className="mt-2 flex flex-wrap justify-end gap-2 text-xs text-slate-600">
-                        <span className="rounded-full bg-slate-100 px-3 py-1">Total Penjualan: -</span>
-                        <span className="rounded-full bg-slate-100 px-3 py-1">Stok: {stockByProduct.get(p.id) || 0}</span>
-                        <span className="rounded-full bg-slate-100 px-3 py-1">{p.unit}</span>
-                        <span className="rounded-full bg-slate-100 px-3 py-1">{p.sku}</span>
                       </div>
                     </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        ))}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ))}
 
-        {!products.length && <p className="text-sm text-slate-500">Belum ada produk. Buat produk pertamamu.</p>}
-      </div>
+          {!products.length && <p className="text-sm text-slate-500">Belum ada produk. Buat produk pertamamu.</p>}
+        </div>
+      )}
     </AppLayout>
   );
 };
