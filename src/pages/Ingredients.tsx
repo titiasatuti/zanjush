@@ -13,7 +13,7 @@ type Ingredient = {
 };
 
 type Movement = {
-  item_id: string;
+  product_id: string;
   movement_type: string;
   quantity: number;
   note: string | null;
@@ -37,7 +37,7 @@ const Ingredients = () => {
           .eq("type", "ingredient")
           .eq("is_active", true)
           .order("created_at", { ascending: false }),
-        supabase.from("stock_movements").select("item_id,movement_type,quantity,note"),
+        supabase.from("stock_movements").select("product_id,movement_type,quantity,note"),
       ]);
 
       setIngredients((itemsRes.data as Ingredient[]) || []);
@@ -50,9 +50,9 @@ const Ingredients = () => {
   const stockByItem = useMemo(() => {
     const map = new Map<string, number>();
     movements.forEach((m) => {
-      if (!m.item_id) return;
+      if (!m.product_id) return;
       const sign = ["in", "return", "adjust"].includes(m.movement_type) ? 1 : -1;
-      map.set(m.item_id, (map.get(m.item_id) || 0) + sign * m.quantity);
+      map.set(m.product_id, (map.get(m.product_id) || 0) + sign * m.quantity);
     });
     return map;
   }, [movements]);

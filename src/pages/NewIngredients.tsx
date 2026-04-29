@@ -124,9 +124,9 @@ const NewIngredients = () => {
     }
 
     if (stockNumber > 0) {
-      const noteParts = [`Harga total beli: ${priceNumber}`, notes.trim() ? `Catatan: ${notes.trim()}` : ""].filter(Boolean);
+      const noteParts = [`Ingredient ID: ${inserted.id}`, `Harga total beli: ${priceNumber}`, notes.trim() ? `Catatan: ${notes.trim()}` : ""].filter(Boolean);
       const { error: stockError } = await supabase.from("stock_movements").insert({
-        item_id: inserted.id,
+        product_id: inserted.id,
         movement_type: "in",
         quantity: stockNumber,
         note: noteParts.join(" | "),
