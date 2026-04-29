@@ -15,6 +15,7 @@ type Product = {
   name: string;
   sku: string;
   unit: string;
+  min_stock: number;
   category: string | null;
   sell_price: number | null;
   cost_price: number | null;
@@ -49,6 +50,7 @@ const ProductDetail = () => {
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [unit, setUnit] = useState("");
+  const [minStock, setMinStock] = useState("10");
   const [category, setCategory] = useState("");
   const [sellPrice, setSellPrice] = useState("");
   const [costPrice, setCostPrice] = useState("");
@@ -92,7 +94,7 @@ const ProductDetail = () => {
     if (!id) return;
     supabase
       .from("products")
-      .select("id,name,sku,unit,category,sell_price,cost_price,photo_url")
+      .select("id,name,sku,unit,min_stock,category,sell_price,cost_price,photo_url")
       .eq("id", id)
       .single()
       .then(({ data, error }) => {
@@ -105,6 +107,7 @@ const ProductDetail = () => {
         setName(data.name);
         setSku(data.sku);
         setUnit(data.unit);
+        setMinStock(data.min_stock?.toString() || "10");
         setCategory(data.category || "");
         setSellPrice(data.sell_price?.toString() || "");
         setCostPrice(data.cost_price?.toString() || "");
@@ -153,10 +156,15 @@ const ProductDetail = () => {
   }, [id, ingredientOptions.length]);
 
   const saveChanges = async () => {
-    if (!id) return;
+    if (!id || !product) return;
     if (!name.trim()) return showError("Nama produk wajib diisi");
     if (!sku.trim()) return showError("SKU wajib diisi");
     if (!unit.trim()) return showError("Satuan wajib diisi");
+
+    const minStockNumber = Number(minStock || 0);
+    if (Number.isNaN(minStockNumber) || minStockNumber < 0) {
+      return showError("Minimum stok tidak valid");
+    }
 
     setIsSaving(true);
 
@@ -170,6 +178,7 @@ const ProductDetail = () => {
         name: cleanName,
         sku: cleanSku,
         unit: cleanUnit,
+        min_stock: minStockNumber,
         category: category.trim() || null,
         sell_price: sellPrice ? Number(sellPrice) : null,
         cost_price: costPrice ? Number(costPrice) : null,
@@ -187,6 +196,7 @@ const ProductDetail = () => {
         name: cleanName,
         sku: cleanSku,
         unit: cleanUnit,
+        min_stock: minStockNumber,
         photo_url: product.photo_url,
       })
       .eq("id", id)
@@ -344,7 +354,7 @@ const ProductDetail = () => {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Informasi Produk</h3>
-                <p className="text-sm text-slate-500">Ubah data utama, harga, kategori, dan kode produk.</p>
+                <p className="text-sm text-slate-500">Ubah data utama, harga, kategori, kode produk, dan minimum stok.</p>
               </div>
             </div>
 
@@ -366,6 +376,11 @@ const ProductDetail = () => {
               <div>
                 <Label className="text-sm font-semibold text-slate-700">Satuan</Label>
                 <Input className="mt-1 h-12 rounded-2xl text-base" value={unit} onChange={(e) => setUnit(e.target.value)} />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Minimum stok</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" type="number" min={0} value={minStock} onChange={(e) => setMinStock(e.target.value)} />
               </div>
 
               <div>

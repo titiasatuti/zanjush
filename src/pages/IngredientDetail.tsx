@@ -15,6 +15,7 @@ type Ingredient = {
   name: string;
   sku: string;
   unit: string;
+  min_stock: number;
   photo_url: string | null;
 };
 
@@ -32,6 +33,7 @@ const IngredientDetail = () => {
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [unit, setUnit] = useState("");
+  const [minStock, setMinStock] = useState("10");
   const [adjustQty, setAdjustQty] = useState("1");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -67,7 +69,7 @@ const IngredientDetail = () => {
     const load = async () => {
       const { data, error } = await supabase
         .from("items")
-        .select("id,name,sku,unit,photo_url")
+        .select("id,name,sku,unit,min_stock,photo_url")
         .eq("id", id)
         .eq("type", "ingredient")
         .single();
@@ -82,6 +84,7 @@ const IngredientDetail = () => {
       setName(data.name);
       setSku(data.sku);
       setUnit(data.unit);
+      setMinStock(data.min_stock?.toString() || "10");
     };
 
     load();
@@ -94,6 +97,11 @@ const IngredientDetail = () => {
     if (!sku.trim()) return showError("Kode / SKU wajib diisi");
     if (!unit.trim()) return showError("Satuan wajib diisi");
 
+    const minStockNumber = Number(minStock || 0);
+    if (Number.isNaN(minStockNumber) || minStockNumber < 0) {
+      return showError("Minimum stok tidak valid");
+    }
+
     setIsSaving(true);
 
     const { error } = await supabase
@@ -102,6 +110,7 @@ const IngredientDetail = () => {
         name: name.trim(),
         sku: sku.trim(),
         unit: unit.trim().toLowerCase(),
+        min_stock: minStockNumber,
       })
       .eq("id", id);
 
@@ -213,7 +222,7 @@ const IngredientDetail = () => {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Informasi Bahan Baku</h3>
-                <p className="text-sm text-slate-500">Ubah nama, kode, dan satuan bahan baku.</p>
+                <p className="text-sm text-slate-500">Ubah nama, kode, satuan, dan minimum stok bahan baku.</p>
               </div>
             </div>
 
@@ -235,6 +244,11 @@ const IngredientDetail = () => {
               <div>
                 <Label className="text-sm font-semibold text-slate-700">Satuan</Label>
                 <Input className="mt-1 h-12 rounded-2xl text-base" value={unit} onChange={(e) => setUnit(e.target.value)} />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-slate-700">Minimum stok</Label>
+                <Input className="mt-1 h-12 rounded-2xl text-base" type="number" min={0} value={minStock} onChange={(e) => setMinStock(e.target.value)} />
               </div>
 
               <Button className="h-12 rounded-2xl bg-emerald-500 text-base hover:bg-emerald-600" onClick={saveChanges} disabled={isSaving}>
