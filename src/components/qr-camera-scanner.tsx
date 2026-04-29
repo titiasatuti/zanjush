@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { BrowserQRCodeReader, IScannerControls } from "@zxing/browser";
+import { BrowserQRCodeReader } from "@zxing/browser";
 
 type QrCameraScannerProps = {
   onDetected: (value: string) => void;
@@ -23,7 +23,6 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const detectorRef = useRef<InstanceType<BarcodeDetectorConstructor> | null>(null);
-  const zxingControlsRef = useRef<IScannerControls | null>(null);
 
   const [isStarting, setIsStarting] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -35,8 +34,7 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
-    zxingControlsRef.current?.stop();
-    zxingControlsRef.current = null;
+    zxingReader.stopContinuousDecode();
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -87,24 +85,24 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
 
   const startZxingScanner = async () => {
     if (!videoRef.current) return;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } },
+      audio: false,
+    });
+    streamRef.current = stream;
+    videoRef.current.srcObject = stream;
+    await videoRef.current.play();
 
     setEngine("zxing");
     setIsRunning(true);
 
-    const controls = await zxingReader.decodeFromVideoDevice(
-      undefined,
-      videoRef.current,
-      (result) => {
-        const text = result?.getText();
-        if (text && text.trim().length > 0) {
-          onDetected(text);
-          stopScanner();
-        }
-      },
-    );
-
-    zxingControlsRef.current = controls;
-    streamRef.current = videoRef.current.srcObject as MediaStream | null;
+    zxingReader.decodeFromVideoElementContinuously(videoRef.current, (result) => {
+      const text = result?.getText();
+      if (text && text.trim().length > 0) {
+        onDetected(text);
+        stopScanner();
+      }
+    });
   };
 
   const startScanner = async () => {
