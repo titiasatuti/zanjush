@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ReactElement } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -56,7 +57,7 @@ const App = () => {
 
   const isAuthenticated = !!session;
 
-  const protectedElement = (element: JSX.Element) => (isAuthenticated ? element : <Navigate to="/login" replace />);
+  const protectedElement = (element: ReactElement) => (isAuthenticated ? element : <Navigate to="/login" replace />);
 
   return (
     <QueryClientProvider client={queryClient}>
