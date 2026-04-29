@@ -34,7 +34,7 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
-    zxingReader.stopContinuousDecode();
+    zxingReader.reset();
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -84,19 +84,16 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
   };
 
   const startZxingScanner = async () => {
-    if (!videoRef.current) return;
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" } },
       audio: false,
     });
     streamRef.current = stream;
-    videoRef.current.srcObject = stream;
-    await videoRef.current.play();
 
     setEngine("zxing");
     setIsRunning(true);
 
-    zxingReader.decodeFromVideoElementContinuously(videoRef.current, (result) => {
+    zxingReader.decodeFromVideoDevice(undefined, videoRef.current!, (result) => {
       const text = result?.getText();
       if (text && text.trim().length > 0) {
         onDetected(text);
