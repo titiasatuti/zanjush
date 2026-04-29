@@ -1,7 +1,7 @@
 import { AppLayout } from "@/components/app-layout";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package2, Plus, CookingPot, History } from "lucide-react";
+import { Package2, Plus, CookingPot, History, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Products = () => {
@@ -41,6 +41,20 @@ const Products = () => {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-slate-600">Kelola data bahan baku, stok awal, harga beli, dan catatan.</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link to="/stock">
+          <Card className="h-full rounded-3xl border-violet-200 transition hover:border-violet-300 hover:shadow-sm">
+            <CardHeader>
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
+                <ClipboardList className="h-6 w-6" />
+              </div>
+              <CardTitle>Ledger Stok</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-slate-600">Lihat semua pergerakan stok masuk dan keluar dengan filter cepat.</p>
             </CardContent>
           </Card>
         </Link>

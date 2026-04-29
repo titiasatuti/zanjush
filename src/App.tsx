@@ -19,6 +19,7 @@ import Login from "./pages/Login";
 import ProductDetail from "./pages/ProductDetail";
 import IngredientDetail from "./pages/IngredientDetail";
 import History from "./pages/History";
+import Stock from "./pages/Stock";
 
 const queryClient = new QueryClient();
 
@@ -79,7 +80,7 @@ const App = () => {
             <Route path="/scan" element={protectedElement(<Scan />)} />
             <Route path="/labels" element={<Navigate to="/products" replace />} />
             <Route path="/history" element={protectedElement(<History />)} />
-            <Route path="/stock" element={<Navigate to="/products/catalogue" replace />} />
+            <Route path="/stock" element={protectedElement(<Stock />)} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

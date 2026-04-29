@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { showError, showSuccess } from "@/utils/toast";
 import { PackageCheck, QrCode, Save, Trash2, Utensils, X } from "lucide-react";
+import { canReduceStock } from "@/lib/stock-utils";
+import { logActivity } from "@/lib/activity-log";
 
 type Product = {
   id: string;
@@ -157,21 +159,44 @@ const ProductDetail = () => {
     if (!unit.trim()) return showError("Satuan wajib diisi");
 
     setIsSaving(true);
+
+    const cleanName = name.trim();
+    const cleanSku = sku.trim();
+    const cleanUnit = unit.trim().toLowerCase();
+
     const { error } = await supabase
       .from("products")
       .update({
-        name: name.trim(),
-        sku: sku.trim(),
-        unit: unit.trim().toLowerCase(),
+        name: cleanName,
+        sku: cleanSku,
+        unit: cleanUnit,
         category: category.trim() || null,
         sell_price: sellPrice ? Number(sellPrice) : null,
         cost_price: costPrice ? Number(costPrice) : null,
       })
       .eq("id", id);
 
+    if (error) {
+      setIsSaving(false);
+      return showError(error.message);
+    }
+
+    const { error: itemError } = await supabase
+      .from("items")
+      .update({
+        name: cleanName,
+        sku: cleanSku,
+        unit: cleanUnit,
+        photo_url: product.photo_url,
+      })
+      .eq("id", id)
+      .eq("type", "product");
+
     setIsSaving(false);
 
-    if (error) return showError(error.message);
+    if (itemError) return showError(itemError.message);
+
+    await logActivity("update_product", `Mengubah produk: ${cleanName}`);
     showSuccess("Perubahan produk disimpan");
   };
 
@@ -196,6 +221,7 @@ const ProductDetail = () => {
 
     if (error) return showError(error.message);
     setLabelPayload(securePayload);
+    await logActivity("create_label", `Membuat label QR produk: ${product.name}`);
     showSuccess("Label produk berhasil dibuat");
   };
 
@@ -207,6 +233,8 @@ const ProductDetail = () => {
     if (!selectedIngredientId) return showError("Pilih bahan baku dulu");
     if (!qty || qty <= 0) return showError("Qty per produk harus lebih dari 0");
 
+    const ingredientName = ingredientOptions.find((opt) => opt.id === selectedIngredientId)?.name || "Bahan baku";
+
     setIsAddingIngredient(true);
     const { error } = await supabase.from("product_ingredients").insert({
       product_id: id,
@@ -217,13 +245,17 @@ const ProductDetail = () => {
     setIsAddingIngredient(false);
 
     if (error) return showError(error.message);
+
+    await logActivity("add_recipe_ingredient", `Menambahkan ${ingredientName} ke komposisi produk ${name}`);
     showSuccess("Bahan baku ditambahkan ke produk");
     loadRecipe();
   };
 
-  const removeRecipeIngredient = async (rowId: string) => {
-    const { error } = await supabase.from("product_ingredients").delete().eq("id", rowId);
+  const removeRecipeIngredient = async (row: ProductIngredient) => {
+    const { error } = await supabase.from("product_ingredients").delete().eq("id", row.id);
     if (error) return showError(error.message);
+
+    await logActivity("remove_recipe_ingredient", `Menghapus ${row.ingredient_name || "bahan baku"} dari komposisi produk ${name}`);
     showSuccess("Bahan baku dihapus dari produk");
     loadRecipe();
   };
@@ -242,6 +274,7 @@ const ProductDetail = () => {
 
     if (error) return showError(error.message);
 
+    await logActivity("stock_in", `Menambah stok produk ${name} sebanyak ${qty}`);
     showSuccess("Stok berhasil ditambah");
     loadMovements();
   };
@@ -250,6 +283,12 @@ const ProductDetail = () => {
     if (!id) return;
     const qty = Number(adjustQty);
     if (!qty || qty < 1) return showError("Qty harus lebih dari 0");
+
+    const stockCheck = await canReduceStock(id, qty);
+    if (!stockCheck.allowed) {
+      await logActivity("blocked_negative_stock", `Pengurangan produk ${name} ditolak: stok ${stockCheck.currentStock}, diminta ${qty}`);
+      return showError(`Stok tidak cukup. Stok tersedia: ${stockCheck.currentStock}`);
+    }
 
     const { error } = await supabase.from("stock_movements").insert({
       product_id: id,
@@ -260,15 +299,29 @@ const ProductDetail = () => {
 
     if (error) return showError(error.message);
 
+    await logActivity("stock_out", `Mengurangi stok produk ${name} sebanyak ${qty}`);
     showSuccess("Stok berhasil dikurangi");
     loadMovements();
   };
 
-  const deleteItem = async () => {
+  const archiveItem = async () => {
     if (!id) return;
-    const { error } = await supabase.from("products").delete().eq("id", id);
-    if (error) return showError(error.message);
-    showSuccess("Produk dihapus");
+
+    const { error: itemError } = await supabase.from("items").update({ is_active: false }).eq("id", id);
+    if (itemError) return showError(itemError.message);
+
+    const { error: productError } = await supabase
+      .from("products")
+      .update({
+        sku: `${sku.trim()}-ARCHIVED-${Date.now()}`,
+        category: "Diarsipkan",
+      })
+      .eq("id", id);
+
+    if (productError) return showError(productError.message);
+
+    await logActivity("delete_product", `Mengarsipkan produk: ${name}`);
+    showSuccess("Produk diarsipkan");
     navigate("/products/catalogue");
   };
 
@@ -364,9 +417,9 @@ const ProductDetail = () => {
               </div>
             </div>
 
-            <Button variant="destructive" className="mt-4 h-11 rounded-2xl" onClick={deleteItem}>
+            <Button variant="destructive" className="mt-4 h-11 rounded-2xl" onClick={archiveItem}>
               <Trash2 className="mr-2 h-4 w-4" />
-              Hapus Produk
+              Arsipkan Produk
             </Button>
           </section>
 
@@ -444,7 +497,7 @@ const ProductDetail = () => {
                       variant="ghost"
                       size="icon"
                       className="h-9 w-9 shrink-0 rounded-full text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                      onClick={() => removeRecipeIngredient(row.id)}
+                      onClick={() => removeRecipeIngredient(row)}
                       aria-label={`Hapus ${row.ingredient_name}`}
                     >
                       <X className="h-5 w-5" />
