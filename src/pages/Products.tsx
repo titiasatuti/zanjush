@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 
 const Products = () => {
   return (
-    <AppLayout title="Products">
+    <AppLayout title="Produk">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card className="rounded-3xl border-emerald-100 transition hover:border-emerald-300 hover:shadow-sm">
           <CardHeader>
@@ -17,16 +17,16 @@ const Products = () => {
               <Button asChild size="sm" className="rounded-xl bg-emerald-500 hover:bg-emerald-600">
                 <Link to="/products/catalougue/new">
                   <Plus className="mr-1 h-4 w-4" />
-                  New Catalogue
+                  Produk Baru
                 </Link>
               </Button>
             </div>
-            <CardTitle>Catalogue</CardTitle>
+            <CardTitle>Produk</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-slate-600">Open your product catalogue, pricing, sales, and stocks.</p>
+            <p className="text-sm text-slate-600">Kelola daftar produk, harga jual, dan stok barang.</p>
             <Button asChild variant="secondary" className="mt-3 rounded-xl">
-              <Link to="/products/catalogue">Open Catalogue</Link>
+              <Link to="/products/catalogue">Buka Produk</Link>
             </Button>
           </CardContent>
         </Card>

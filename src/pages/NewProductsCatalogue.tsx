@@ -14,7 +14,7 @@ const NewProductsCatalogue = () => {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [sellPrice, setSellPrice] = useState("");
-  const [category, setCategory] = useState("Uncategorized");
+  const [category, setCategory] = useState("Tanpa Kategori");
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
   const [unit, setUnit] = useState("Pcs");
   const [costPrice, setCostPrice] = useState("");
@@ -50,7 +50,7 @@ const NewProductsCatalogue = () => {
   };
 
   const saveCatalogue = async () => {
-    if (!name) return showError("Name is required");
+    if (!name) return showError("Nama wajib diisi");
     setIsSaving(true);
 
     const uploadedPhotoUrl = await uploadPhoto();
@@ -66,7 +66,7 @@ const NewProductsCatalogue = () => {
       sku: finalCode,
       unit: unit.toLowerCase(),
       min_stock: 0,
-      category: category.trim() || "Uncategorized",
+      category: category.trim() || "Tanpa Kategori",
       sell_price: sellPrice ? Number(sellPrice) : null,
       cost_price: costPrice ? Number(costPrice) : null,
       photo_url: uploadedPhotoUrl,
@@ -77,20 +77,20 @@ const NewProductsCatalogue = () => {
       return showError(error.message);
     }
 
-    showSuccess("Product saved");
+    showSuccess("Produk berhasil disimpan");
     navigate("/products/catalogue");
   };
 
   return (
-    <AppLayout title="New Product" backTo="/products/catalogue">
+    <AppLayout title="Produk Baru" backTo="/products/catalogue">
       <div className="grid gap-3 rounded-2xl border bg-white p-4">
         <div>
-          <Label>Image</Label>
+          <Label>Gambar</Label>
           <Input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} />
         </div>
 
         <div>
-          <Label>Name</Label>
+          <Label>Nama</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </div>
 
@@ -140,7 +140,7 @@ const NewProductsCatalogue = () => {
             <Input
               value={itemCode}
               onChange={(e) => setItemCode(e.target.value)}
-              placeholder="Masukkan Kode Barang atau generate"
+              placeholder="Masukkan kode barang atau generate"
             />
             <Button type="button" variant="secondary" className="rounded-xl" onClick={() => setItemCode(generateCode(name || "ITEM"))}>
               Generate
@@ -149,7 +149,7 @@ const NewProductsCatalogue = () => {
         </div>
 
         <Button className="rounded-xl bg-emerald-500 hover:bg-emerald-600" onClick={saveCatalogue} disabled={isSaving}>
-          {isSaving ? "Saving..." : "Simpan Produk"}
+          {isSaving ? "Menyimpan..." : "Simpan Produk"}
         </Button>
       </div>
     </AppLayout>
