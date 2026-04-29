@@ -1,12 +1,11 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Package2, QrCode, ClipboardList, Tags } from "lucide-react";
+import { LayoutDashboard, Package2, QrCode, Tags } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/products", label: "Products", icon: Package2 },
   { to: "/scan", label: "Scan", icon: QrCode, center: true },
-  { to: "/stock", label: "Stock", icon: ClipboardList },
   { to: "/labels", label: "Labels", icon: Tags },
 ];
 
