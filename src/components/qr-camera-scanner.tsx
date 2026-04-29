@@ -50,6 +50,20 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
     setEngine(null);
   };
 
+  const getCameraStream = async () => {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+    } catch {
+      return navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+    }
+  };
+
   const scanLoop = async () => {
     if (!videoRef.current || !detectorRef.current) {
       rafRef.current = requestAnimationFrame(scanLoop);
@@ -71,10 +85,7 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
 
   const startNativeScanner = async () => {
     detectorRef.current = new window.BarcodeDetector!({ formats: ["qr_code"] });
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } },
-      audio: false,
-    });
+    const stream = await getCameraStream();
     streamRef.current = stream;
 
     if (videoRef.current) {
@@ -88,10 +99,7 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
   };
 
   const startZxingScanner = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } },
-      audio: false,
-    });
+    const stream = await getCameraStream();
     streamRef.current = stream;
 
     setEngine("zxing");
@@ -116,10 +124,15 @@ export const QrCameraScanner = ({ onDetected }: QrCameraScannerProps) => {
       return;
     }
 
-    if (window.BarcodeDetector) {
-      await startNativeScanner();
-    } else {
-      await startZxingScanner();
+    try {
+      if (window.BarcodeDetector) {
+        await startNativeScanner();
+      } else {
+        await startZxingScanner();
+      }
+    } catch {
+      stopScanner();
+      setErrorText("Unable to access a camera on this device. Please check camera permissions.");
     }
 
     setIsStarting(false);
