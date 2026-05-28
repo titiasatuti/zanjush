@@ -8,6 +8,7 @@ import { QrCameraScanner } from "@/components/qr-camera-scanner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { canReduceStock, readItemStock } from "@/lib/stock-utils";
 import { logActivity } from "@/lib/activity-log";
+import { formatDateId, getExpiryBadgeClass, getExpiryMeta } from "@/lib/expiry-utils";
 
 type ResolvedItem = {
   id: string;
@@ -17,6 +18,8 @@ type ResolvedItem = {
   kind: "product" | "ingredient";
   stock: number;
   batchId: string;
+  productionDate: string | null;
+  expiryDate: string | null;
 };
 
 const Scan = () => {
@@ -43,7 +46,7 @@ const Scan = () => {
     const token = cleanPayload.startsWith("v1:") ? cleanPayload.replace("v1:", "") : cleanPayload;
     const { data: batch, error } = await supabase
       .from("stock_batches")
-      .select("id,product_id")
+      .select("id,product_id,production_date,expiry_date")
       .eq("qr_payload", token)
       .maybeSingle();
 
@@ -75,6 +78,8 @@ const Scan = () => {
         kind: "product",
         stock,
         batchId: batch.id,
+        productionDate: batch.production_date,
+        expiryDate: batch.expiry_date,
       });
       setPayload(cleanPayload);
       setIsOpen(true);
@@ -90,6 +95,8 @@ const Scan = () => {
         kind: "ingredient",
         stock,
         batchId: batch.id,
+        productionDate: batch.production_date,
+        expiryDate: batch.expiry_date,
       });
       setPayload(cleanPayload);
       setIsOpen(true);
@@ -221,6 +228,18 @@ const Scan = () => {
                       ? `Rp ${resolved.sell_price.toLocaleString()}`
                       : "-"}
                   </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-sm text-slate-500">{resolved.kind === "product" ? "Tanggal pembuatan" : "Tanggal pembelian"}</p>
+                  <p className="font-semibold text-slate-900">{formatDateId(resolved.productionDate)}</p>
+                </div>
+                <div className={`rounded-xl p-3 ${getExpiryBadgeClass(getExpiryMeta(resolved.expiryDate).status)}`}>
+                  <p className="text-sm text-slate-500">Tanggal expired</p>
+                  <p className="font-semibold">{formatDateId(resolved.expiryDate)}</p>
+                  <p className="mt-1 text-xs">{getExpiryMeta(resolved.expiryDate).label}</p>
                 </div>
               </div>
 

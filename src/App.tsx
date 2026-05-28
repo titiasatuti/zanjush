@@ -18,7 +18,6 @@ import NewIngredients from "./pages/NewIngredients";
 import Login from "./pages/Login";
 import ProductDetail from "./pages/ProductDetail";
 import IngredientDetail from "./pages/IngredientDetail";
-import History from "./pages/History";
 import Stock from "./pages/Stock";
 import PrintLabel from "./pages/PrintLabel";
 import SettingsPage from "./pages/Settings";
@@ -82,8 +81,8 @@ const App = () => {
             <Route path="/scan" element={protectedElement(<Scan />)} />
             <Route path="/print-label" element={protectedElement(<PrintLabel />)} />
             <Route path="/labels" element={<Navigate to="/products" replace />} />
-            <Route path="/history" element={protectedElement(<History />)} />
             <Route path="/stock" element={protectedElement(<Stock />)} />
+            <Route path="/history" element={<Navigate to="/stock" replace />} />
             <Route path="/pengaturan" element={protectedElement(<SettingsPage />)} />
             <Route path="*" element={<NotFound />} />
           </Routes>

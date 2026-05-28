@@ -45,6 +45,8 @@ const NewIngredients = () => {
   const [unit, setUnit] = useState("pcs");
   const [currentStock, setCurrentStock] = useState("");
   const [minStock, setMinStock] = useState("10");
+  const [lastPurchaseDate, setLastPurchaseDate] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
   const [totalBuyPrice, setTotalBuyPrice] = useState("");
   const [notes, setNotes] = useState("");
   const [itemCode, setItemCode] = useState("");
@@ -98,6 +100,10 @@ const NewIngredients = () => {
     const minStockNumber = Number(minStock || 0);
     if (Number.isNaN(minStockNumber) || minStockNumber < 0) return showError("Minimum stok tidak valid");
 
+    if (lastPurchaseDate && expiryDate && expiryDate < lastPurchaseDate) {
+      return showError("Tanggal expired tidak boleh lebih awal dari tanggal pembelian");
+    }
+
     const priceNumber = Number(totalBuyPrice || 0);
     if (Number.isNaN(priceNumber) || priceNumber < 0) return showError("Harga total beli tidak valid");
 
@@ -120,6 +126,8 @@ const NewIngredients = () => {
         sku: skuWithCategory,
         unit: unit.toLowerCase(),
         min_stock: minStockNumber,
+        last_purchase_date: lastPurchaseDate || null,
+        expiry_date: expiryDate || null,
         photo_url: uploadedPhotoUrl,
         is_active: true,
       })
@@ -131,7 +139,30 @@ const NewIngredients = () => {
       return showError(insertItemError?.message || "Gagal menyimpan bahan baku");
     }
 
-    if (stockNumber > 0 || priceNumber > 0 || notes.trim()) {
+    if (stockNumber > 0) {
+      const purchaseDate = lastPurchaseDate || new Date().toISOString().slice(0, 10);
+      const resolvedExpiryDate = expiryDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+      const { data: insertedBatch, error: batchError } = await supabase
+        .from("stock_batches")
+        .insert({
+          product_id: insertedItem.id,
+          batch_code: `ING-${Date.now()}`,
+          production_date: purchaseDate,
+          expiry_date: resolvedExpiryDate,
+          initial_quantity: stockNumber,
+          remaining_quantity: stockNumber,
+          note: notes.trim() || null,
+          qr_payload: crypto.randomUUID().replace(/-/g, ""),
+        })
+        .select("id")
+        .single();
+
+      if (batchError || !insertedBatch) {
+        setIsSaving(false);
+        return showError(batchError?.message || "Gagal membuat batch awal bahan baku");
+      }
+
       const movementNote = [
         notes.trim() ? notes.trim() : null,
         priceNumber > 0 ? `Harga total beli: ${priceNumber}` : null,
@@ -141,8 +172,9 @@ const NewIngredients = () => {
 
       const { error: movementError } = await supabase.from("stock_movements").insert({
         product_id: insertedItem.id,
+        batch_id: insertedBatch.id,
         movement_type: "in",
-        quantity: stockNumber > 0 ? stockNumber : 0,
+        quantity: stockNumber,
         note: movementNote || null,
       });
 
@@ -227,6 +259,21 @@ const NewIngredients = () => {
               <div>
                 <Label className="text-sm font-semibold text-slate-700">Harga total beli</Label>
                 <Input className="mt-1 h-12 rounded-2xl text-base" type="number" min={0} value={totalBuyPrice} onChange={(e) => setTotalBuyPrice(e.target.value)} placeholder="0" />
+              </div>
+
+              <div className="sm:col-span-2 rounded-2xl bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tracking umur bahan</p>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-sm font-semibold text-slate-700">Tanggal pembelian terakhir</Label>
+                    <Input className="mt-1 h-12 rounded-2xl bg-white text-base" type="date" value={lastPurchaseDate} onChange={(e) => setLastPurchaseDate(e.target.value)} />
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-semibold text-slate-700">Tanggal expired</Label>
+                    <Input className="mt-1 h-12 rounded-2xl bg-white text-base" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+                  </div>
+                </div>
               </div>
 
               <div className="sm:col-span-2">

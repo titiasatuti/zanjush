@@ -12,7 +12,7 @@ const navItems = [
   { to: "/", label: "Dasbor", icon: LayoutDashboard },
   { to: "/scan", label: "Scan QR", icon: QrCode },
   { to: "/products", label: "Produk", icon: Package2 },
-  { to: "/stock", label: "Ledger Stok", icon: ClipboardList },
+  { to: "/stock", label: "Histori Stock", icon: ClipboardList },
   { to: "/pengaturan", label: "Pengaturan", icon: Settings },
 ];
 
@@ -108,7 +108,6 @@ export const AppLayout = ({ children, title, backTo }: AppLayoutProps) => {
               )}
               <div>
                 <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
-                <p className="text-sm text-slate-500">Operasional harian cepat, detail tetap rapi.</p>
               </div>
             </div>
 

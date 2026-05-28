@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/app-layout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { getExpiryBadgeClass, getExpiryMeta, formatDateId } from "@/lib/expiry-utils";
 
 type Ingredient = {
   id: string;
@@ -10,6 +11,8 @@ type Ingredient = {
   sku: string;
   unit: string;
   photo_url: string | null;
+  last_purchase_date: string | null;
+  expiry_date: string | null;
 };
 
 type Movement = {
@@ -17,6 +20,10 @@ type Movement = {
   movement_type: string;
   quantity: number;
   note: string | null;
+};
+
+type BatchSummary = {
+  product_id: string;
 };
 
 const readCategoryFromSku = (sku: string) => {
@@ -27,6 +34,8 @@ const readCategoryFromSku = (sku: string) => {
 const Ingredients = () => {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [batches, setBatches] = useState<BatchSummary[]>([]);
+  const [expiryFilter, setExpiryFilter] = useState<"all" | "near" | "expired">("all");
   const [isLoading, setIsLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
 
@@ -35,24 +44,26 @@ const Ingredients = () => {
       setIsLoading(true);
       setErrorText("");
 
-      const [itemsRes, movementsRes] = await Promise.all([
+      const [itemsRes, movementsRes, batchesRes] = await Promise.all([
         supabase
           .from("items")
-          .select("id,name,sku,unit,photo_url")
+          .select("id,name,sku,unit,photo_url,last_purchase_date,expiry_date")
           .eq("type", "ingredient")
           .eq("is_active", true)
           .order("created_at", { ascending: false }),
         supabase.from("stock_movements").select("product_id,movement_type,quantity,note"),
+        supabase.from("stock_batches").select("product_id"),
       ]);
 
-      if (itemsRes.error || movementsRes.error) {
-        setErrorText(itemsRes.error?.message || movementsRes.error?.message || "Gagal memuat bahan baku");
+      if (itemsRes.error || movementsRes.error || batchesRes.error) {
+        setErrorText(itemsRes.error?.message || movementsRes.error?.message || batchesRes.error?.message || "Gagal memuat bahan baku");
         setIsLoading(false);
         return;
       }
 
       setIngredients((itemsRes.data as Ingredient[]) || []);
       setMovements((movementsRes.data as Movement[]) || []);
+      setBatches((batchesRes.data as BatchSummary[]) || []);
       setIsLoading(false);
     };
 
@@ -69,22 +80,55 @@ const Ingredients = () => {
     return map;
   }, [movements]);
 
+  const filteredIngredients = useMemo(() => {
+    if (expiryFilter === "all") return ingredients;
+
+    return ingredients.filter((item) => {
+      const meta = getExpiryMeta(item.expiry_date);
+      if (expiryFilter === "expired") {
+        return meta.status === "expired" || meta.status === "today";
+      }
+      return meta.status === "near";
+    });
+  }, [ingredients, expiryFilter]);
+
   const grouped = useMemo(() => {
     const map = new Map<string, Ingredient[]>();
-    ingredients.forEach((item) => {
+    filteredIngredients.forEach((item) => {
       const category = readCategoryFromSku(item.sku);
       if (!map.has(category)) map.set(category, []);
       map.get(category)!.push(item);
     });
     return Array.from(map.entries());
-  }, [ingredients]);
+  }, [filteredIngredients]);
+
+  const batchCountByItem = useMemo(() => {
+    const map = new Map<string, number>();
+    batches.forEach((batch) => {
+      map.set(batch.product_id, (map.get(batch.product_id) || 0) + 1);
+    });
+    return map;
+  }, [batches]);
 
   return (
     <AppLayout title="Atur Bahan Baku" backTo="/products">
-      <div className="mb-4">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <Button asChild className="rounded-xl bg-emerald-500 hover:bg-emerald-600">
           <Link to="/products/ingredients/new">Tambah Bahan Baku</Link>
         </Button>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter Expired</span>
+          <select
+            className="h-10 rounded-xl border px-3 text-sm"
+            value={expiryFilter}
+            onChange={(event) => setExpiryFilter(event.target.value as "all" | "near" | "expired")}
+          >
+            <option value="all">Semua</option>
+            <option value="near">Hampir expired (maks. 3 hari)</option>
+            <option value="expired">Sudah expired</option>
+          </select>
+        </div>
       </div>
 
       {isLoading ? (
@@ -101,34 +145,64 @@ const Ingredients = () => {
               </div>
 
               <div className="space-y-3">
-                {items.map((item) => (
-                  <Link key={item.id} to={`/products/ingredients/${item.id}`} className="block rounded-3xl border bg-white p-3 shadow-sm transition hover:shadow-md">
-                    <div className="flex items-start gap-3 sm:gap-4">
-                      <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
-                        {item.photo_url ? (
-                          <img src={item.photo_url} alt={item.name} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xs font-medium text-slate-400">
-                            Tidak Ada Gambar
+                {items.map((item) => {
+                  const expiry = getExpiryMeta(item.expiry_date);
+                  const stock = stockByItem.get(item.id) || 0;
+                  const batchCount = batchCountByItem.get(item.id) || 0;
+
+                  return (
+                    <Link key={item.id} to={`/products/ingredients/${item.id}`} className="block rounded-3xl border bg-white p-3 shadow-sm transition hover:shadow-md">
+                      <div className="flex items-start gap-3 sm:gap-4">
+                        <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
+                          {item.photo_url ? (
+                            <img src={item.photo_url} alt={item.name} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-xs font-medium text-slate-400">
+                              Tidak Ada Gambar
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">{item.name}</p>
+                              <p className="mt-0.5 text-sm text-slate-500">Beli terakhir: {formatDateId(item.last_purchase_date)}</p>
+                            </div>
+                            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${getExpiryBadgeClass(expiry.status)}`}>
+                              {expiry.label}
+                            </span>
                           </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1 text-right">
-                        <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">{item.name}</p>
-                        <div className="mt-2 flex flex-wrap justify-end gap-2 text-xs text-slate-600">
-                          <span className="rounded-full bg-slate-100 px-3 py-1">Stok: {stockByItem.get(item.id) || 0}</span>
-                          <span className="rounded-full bg-slate-100 px-3 py-1">{item.unit}</span>
-                          <span className="rounded-full bg-slate-100 px-3 py-1">{item.sku.replace(/\[CAT:.*?\]\s?/g, "")}</span>
+
+                          <div className="mt-3 grid grid-cols-3 gap-2">
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-slate-500">Stok</p>
+                              <p className="text-sm font-semibold text-slate-900">{stock}</p>
+                            </div>
+                            <div className="rounded-xl bg-indigo-50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-indigo-500">Batch</p>
+                              <p className="text-sm font-semibold text-indigo-700">{batchCount}</p>
+                            </div>
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-slate-500">Expired</p>
+                              <p className="truncate text-sm font-semibold text-slate-900">{formatDateId(item.expiry_date)}</p>
+                            </div>
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                            <span>SKU: {item.sku.replace(/\[CAT:.*?\]\s?/g, "")}</span>
+                            <span>Unit: {item.unit}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Link>
-                ))}
+                    </Link>
+                  );
+                })}
               </div>
             </section>
           ))}
 
-          {!ingredients.length && <p className="text-sm text-slate-500">Belum ada bahan baku. Tambahkan bahan baku pertama.</p>}
+          {!filteredIngredients.length && <p className="text-sm text-slate-500">Tidak ada bahan baku pada filter ini.</p>}
         </div>
       )}
     </AppLayout>

@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/app-layout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { getExpiryBadgeClass, getExpiryMeta, formatDateId } from "@/lib/expiry-utils";
 
 type Product = {
   id: string;
@@ -12,6 +13,8 @@ type Product = {
   category: string | null;
   sell_price: number | null;
   photo_url: string | null;
+  production_date: string | null;
+  expiry_date: string | null;
 };
 
 type Movement = {
@@ -20,11 +23,17 @@ type Movement = {
   quantity: number;
 };
 
+type BatchSummary = {
+  product_id: string;
+};
+
 const isIngredientMirror = (sku: string) => sku.includes("[CAT:") || sku.includes("ING-");
 
 const ProductsCatalogue = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [batches, setBatches] = useState<BatchSummary[]>([]);
+  const [expiryFilter, setExpiryFilter] = useState<"all" | "near" | "expired">("all");
   const [isLoading, setIsLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
 
@@ -33,16 +42,17 @@ const ProductsCatalogue = () => {
       setIsLoading(true);
       setErrorText("");
 
-      const [productsRes, movementsRes] = await Promise.all([
+      const [productsRes, movementsRes, batchesRes] = await Promise.all([
         supabase
           .from("products")
-          .select("id,name,sku,unit,category,sell_price,photo_url")
+          .select("id,name,sku,unit,category,sell_price,photo_url,production_date,expiry_date")
           .order("created_at", { ascending: false }),
         supabase.from("stock_movements").select("product_id,movement_type,quantity"),
+        supabase.from("stock_batches").select("product_id"),
       ]);
 
-      if (productsRes.error || movementsRes.error) {
-        setErrorText(productsRes.error?.message || movementsRes.error?.message || "Gagal memuat produk");
+      if (productsRes.error || movementsRes.error || batchesRes.error) {
+        setErrorText(productsRes.error?.message || movementsRes.error?.message || batchesRes.error?.message || "Gagal memuat produk");
         setIsLoading(false);
         return;
       }
@@ -52,6 +62,7 @@ const ProductsCatalogue = () => {
 
       setProducts(catalogueOnly);
       setMovements((movementsRes.data as Movement[]) || []);
+      setBatches((batchesRes.data as BatchSummary[]) || []);
       setIsLoading(false);
     };
     load();
@@ -66,9 +77,21 @@ const ProductsCatalogue = () => {
     return map;
   }, [movements]);
 
+  const filteredProducts = useMemo(() => {
+    if (expiryFilter === "all") return products;
+
+    return products.filter((product) => {
+      const meta = getExpiryMeta(product.expiry_date);
+      if (expiryFilter === "expired") {
+        return meta.status === "expired" || meta.status === "today";
+      }
+      return meta.status === "near";
+    });
+  }, [products, expiryFilter]);
+
   const productsByCategory = useMemo(() => {
     const grouped = new Map<string, Product[]>();
-    products.forEach((product) => {
+    filteredProducts.forEach((product) => {
       const category = product.category?.trim() || "Tanpa Kategori";
       if (!grouped.has(category)) {
         grouped.set(category, []);
@@ -76,14 +99,35 @@ const ProductsCatalogue = () => {
       grouped.get(category)!.push(product);
     });
     return Array.from(grouped.entries());
-  }, [products]);
+  }, [filteredProducts]);
+
+  const batchCountByItem = useMemo(() => {
+    const map = new Map<string, number>();
+    batches.forEach((batch) => {
+      map.set(batch.product_id, (map.get(batch.product_id) || 0) + 1);
+    });
+    return map;
+  }, [batches]);
 
   return (
     <AppLayout title="Produk" backTo="/products">
-      <div className="mb-4">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <Button asChild className="rounded-xl bg-emerald-500 hover:bg-emerald-600">
           <Link to="/products/catalogue/new">Buat Produk Baru</Link>
         </Button>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter Expired</span>
+          <select
+            className="h-10 rounded-xl border px-3 text-sm"
+            value={expiryFilter}
+            onChange={(event) => setExpiryFilter(event.target.value as "all" | "near" | "expired")}
+          >
+            <option value="all">Semua</option>
+            <option value="near">Hampir expired (maks. 3 hari)</option>
+            <option value="expired">Sudah expired</option>
+          </select>
+        </div>
       </div>
 
       {isLoading ? (
@@ -100,40 +144,67 @@ const ProductsCatalogue = () => {
               </div>
 
               <div className="space-y-3">
-                {categoryProducts.map((p) => (
-                  <Link key={p.id} to={`/products/catalogue/${p.id}`} className="block rounded-3xl border bg-white p-3 shadow-sm transition hover:shadow-md">
-                    <div className="flex items-start gap-3 sm:gap-4">
-                      <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
-                        {p.photo_url ? (
-                          <img src={p.photo_url} alt={p.name} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xs font-medium text-slate-400">
-                            Tidak Ada Gambar
+                {categoryProducts.map((p) => {
+                  const expiry = getExpiryMeta(p.expiry_date);
+                  const stock = stockByProduct.get(p.id) || 0;
+                  const batchCount = batchCountByItem.get(p.id) || 0;
+
+                  return (
+                    <Link key={p.id} to={`/products/catalogue/${p.id}`} className="block rounded-3xl border bg-white p-3 shadow-sm transition hover:shadow-md">
+                      <div className="flex items-start gap-3 sm:gap-4">
+                        <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-100 sm:h-28 sm:w-28">
+                          {p.photo_url ? (
+                            <img src={p.photo_url} alt={p.name} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-xs font-medium text-slate-400">
+                              Tidak Ada Gambar
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">{p.name}</p>
+                              <p className="mt-0.5 text-sm font-medium text-emerald-700">
+                                {typeof p.sell_price === "number" ? `Rp ${p.sell_price.toLocaleString()}` : "Harga belum diatur"}
+                              </p>
+                            </div>
+                            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${getExpiryBadgeClass(expiry.status)}`}>
+                              {expiry.label}
+                            </span>
                           </div>
-                        )}
-                      </div>
 
-                      <div className="min-w-0 flex-1 text-right">
-                        <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">{p.name}</p>
-                        <p className="mt-1 text-sm font-medium text-emerald-700">
-                          {typeof p.sell_price === "number" ? `Rp ${p.sell_price.toLocaleString()}` : "Harga belum diatur"}
-                        </p>
+                          <div className="mt-3 grid grid-cols-3 gap-2">
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-slate-500">Stok</p>
+                              <p className="text-sm font-semibold text-slate-900">{stock}</p>
+                            </div>
+                            <div className="rounded-xl bg-indigo-50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-indigo-500">Batch</p>
+                              <p className="text-sm font-semibold text-indigo-700">{batchCount}</p>
+                            </div>
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-slate-500">Expired</p>
+                              <p className="truncate text-sm font-semibold text-slate-900">{formatDateId(p.expiry_date)}</p>
+                            </div>
+                          </div>
 
-                        <div className="mt-2 flex flex-wrap justify-end gap-2 text-xs text-slate-600">
-                          <span className="rounded-full bg-slate-100 px-3 py-1">Total Penjualan: -</span>
-                          <span className="rounded-full bg-slate-100 px-3 py-1">Stok: {stockByProduct.get(p.id) || 0}</span>
-                          <span className="rounded-full bg-slate-100 px-3 py-1">{p.unit}</span>
-                          <span className="rounded-full bg-slate-100 px-3 py-1">{p.sku}</span>
+                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                            <span>SKU: {p.sku}</span>
+                            <span>Unit: {p.unit}</span>
+                            <span>Produksi: {formatDateId(p.production_date)}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Link>
-                ))}
+                    </Link>
+                  );
+                })}
               </div>
             </section>
           ))}
 
-          {!products.length && <p className="text-sm text-slate-500">Belum ada produk. Buat produk pertamamu.</p>}
+          {!filteredProducts.length && <p className="text-sm text-slate-500">Tidak ada produk pada filter ini.</p>}
         </div>
       )}
     </AppLayout>
