@@ -48,16 +48,16 @@ export const AppLayout = ({ children, title, backTo }: AppLayoutProps) => {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto flex max-w-7xl">
         <aside className="sticky top-0 hidden h-screen w-64 border-r bg-white p-4 md:flex md:flex-col">
-          <div className="mb-8 rounded-2xl bg-emerald-500 p-4 text-white">
+          <div className="mb-8 rounded-2xl">
             {branding.logo_url ? (
-              <img src={branding.logo_url} alt="Logo dashboard" className="h-16 w-full rounded-xl object-contain" />
+              <img src={branding.logo_url} alt="Logo dashboard" className="h-16 w-full rounded-xl object-cover object-center" />
             ) : (
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/20">
+              <div className="flex items-center gap-3 text-slate-900">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100">
                   <BrandIcon className="h-6 w-6" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs uppercase tracking-wider text-emerald-100">Operasional</p>
+                  <p className="text-xs uppercase tracking-wider text-slate-500">Operasional</p>
                   <h1 className="truncate text-xl font-semibold">{branding.dashboard_name}</h1>
                 </div>
               </div>

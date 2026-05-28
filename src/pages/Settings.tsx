@@ -260,9 +260,9 @@ const SettingsPage = () => {
 
             <div className="rounded-3xl bg-emerald-500 p-5 text-white">
               {logoFile ? (
-                <img src={URL.createObjectURL(logoFile)} alt="Preview logo" className="h-24 w-full rounded-2xl object-contain" />
+                <img src={URL.createObjectURL(logoFile)} alt="Preview logo" className="h-24 w-full rounded-2xl object-cover object-center" />
               ) : branding.logo_url ? (
-                <img src={branding.logo_url} alt="Preview logo" className="h-24 w-full rounded-2xl object-contain" />
+                <img src={branding.logo_url} alt="Preview logo" className="h-24 w-full rounded-2xl object-cover object-center" />
               ) : (
                 <div className="flex items-center gap-3">
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/20">

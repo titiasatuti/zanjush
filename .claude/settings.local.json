@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git worktree *)",
+      "Bash(npx create-next-app@latest . --ts --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --yes)",
+      "Bash(npm i *)",
+      "mcp__plugin_supabase_supabase__list_projects",
+      "mcp__plugin_supabase_supabase__search_docs",
+      "Bash(npm pkg *)",
+      "mcp__plugin_supabase_supabase__apply_migration",
+      "Bash(npm run *)",
+      "mcp__plugin_supabase_supabase__get_project_url",
+      "mcp__plugin_supabase_supabase__get_publishable_keys",
+      "mcp__plugin_supabase_supabase__execute_sql",
+      "Bash(npm test *)",
+      "Bash(npm ls *)",
+      "Bash(npm install *)",
+      "Skill(update-config)"
+    ]
+  }
+}

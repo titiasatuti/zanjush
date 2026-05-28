@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { showError, showSuccess } from "@/utils/toast";
+import { BrandingSettings, defaultBranding, getBrandingIcon, loadBrandingSettings } from "@/lib/branding";
 
 type LoginProps = {
   isAuthenticated: boolean;
@@ -15,6 +16,13 @@ const Login = ({ isAuthenticated }: LoginProps) => {
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [branding, setBranding] = useState<BrandingSettings>(defaultBranding);
+
+  useEffect(() => {
+    loadBrandingSettings().then(setBranding);
+  }, []);
+
+  const BrandIcon = getBrandingIcon(branding.icon_name);
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
@@ -63,10 +71,28 @@ const Login = ({ isAuthenticated }: LoginProps) => {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="mx-auto w-full max-w-md">
-        <div className="mb-6 rounded-3xl bg-emerald-500 p-6 text-white">
-          <p className="text-xs uppercase tracking-wider text-emerald-100">Welcome Back</p>
-          <h1 className="mt-1 text-2xl font-semibold">Juice Inventory Login</h1>
-          <p className="mt-2 text-sm text-emerald-50">Sign in to record stock movements and manage operations securely.</p>
+        <div className="mb-6 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
+          {branding.logo_url ? (
+            <img src={branding.logo_url} alt="Logo Zanjus" className="h-44 w-full object-cover object-center" />
+          ) : (
+            <div className="flex h-44 items-center justify-center bg-gradient-to-br from-emerald-500 via-lime-500 to-orange-400 px-6 text-center text-white">
+              <div>
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20">
+                  <BrandIcon className="h-8 w-8" />
+                </div>
+                <p className="text-xs uppercase tracking-[0.3em] text-emerald-100">Welcome Back</p>
+                <h1 className="mt-1 text-2xl font-semibold">{branding.dashboard_name}</h1>
+                <p className="mt-2 text-sm text-emerald-50">Masuk untuk mengelola stok dan operasional dengan cepat.</p>
+              </div>
+            </div>
+          )}
+          {branding.logo_url && (
+            <div className="space-y-1 px-6 py-4 text-slate-900">
+              <p className="text-xs uppercase tracking-wider text-slate-500">Welcome Back</p>
+              <h1 className="text-2xl font-semibold">{branding.dashboard_name}</h1>
+              <p className="text-sm text-slate-500">Masuk untuk mengelola stok dan operasional dengan cepat.</p>
+            </div>
+          )}
         </div>
 
         <div className="rounded-3xl border bg-white p-5 shadow-sm">

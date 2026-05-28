@@ -16,6 +16,8 @@ import {
   Warehouse,
 } from "lucide-react";
 
+export const defaultLogoUrl = "/photo_6107291943155994573_x.jpg";
+
 export type BrandingSettings = {
   dashboard_name: string;
   icon_name: string;
@@ -25,7 +27,7 @@ export type BrandingSettings = {
 export const defaultBranding: BrandingSettings = {
   dashboard_name: "Operasional Inventori Jus",
   icon_name: "Citrus",
-  logo_url: null,
+  logo_url: defaultLogoUrl,
 };
 
 export const brandingIcons = {
@@ -64,7 +66,7 @@ export const loadBrandingSettings = async (): Promise<BrandingSettings> => {
     const settings = {
       dashboard_name: data.dashboard_name || defaultBranding.dashboard_name,
       icon_name: data.icon_name || defaultBranding.icon_name,
-      logo_url: data.logo_url || null,
+      logo_url: data.logo_url || defaultBranding.logo_url,
     };
 
     localStorage.setItem(fallbackStorageKey, JSON.stringify(settings));
@@ -83,7 +85,7 @@ export const saveBrandingSettings = async (settings: BrandingSettings) => {
   const normalizedSettings = {
     dashboard_name: settings.dashboard_name.trim() || defaultBranding.dashboard_name,
     icon_name: settings.icon_name || defaultBranding.icon_name,
-    logo_url: settings.logo_url || null,
+    logo_url: settings.logo_url || defaultBranding.logo_url,
   };
 
   localStorage.setItem(fallbackStorageKey, JSON.stringify(normalizedSettings));
