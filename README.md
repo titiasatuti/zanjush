@@ -1,134 +1,193 @@
-# Inventory App
+# Zanjus Inventory
 
-Aplikasi inventori berbasis React, TypeScript, Vite, Tailwind CSS, shadcn/ui, dan Supabase.
+Aplikasi inventory dan produksi minuman berbasis React + TypeScript + Vite + Supabase.
 
-## Menjalankan di Render.com
+Project ini sudah memakai model **made-by-order**:
 
-Gunakan konfigurasi berikut saat membuat service baru di Render.com.
+- Produk tidak disimpan sebagai stok batch produk.
+- Stok produk dihitung **otomatis** dari stok bahan baku (virtual stock).
+- Saat pesanan produk diproses, bahan baku dipotong otomatis pakai strategi **FEFO** (First Expired, First Out).
 
-### 1. Pilih tipe service
+## Tech Stack
 
-Pilih:
+- Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn/ui
+- Backend as a Service: Supabase (Auth, Postgres, Storage)
+- Routing: React Router
+- Icons: Lucide
 
-- **Static Site**
+## Konsep Utama
 
-Aplikasi ini adalah frontend Vite, jadi hasil build akan berupa file statis di folder `dist`.
+### 1) Virtual stock produk
 
-### 2. Build Command
+Stok produk diturunkan dari resep produk (`product_ingredients`) dan stok bahan baku.
 
-Gunakan:
+Formula:
 
-npm install && npm run build
+product_stock = min(
+floor(stock_ingredient_1 / qty_per_unit_1),
+floor(stock_ingredient_2 / qty_per_unit_2),
+...
+)
 
-### 3. Publish Directory
+Artinya bottleneck bahan baku menentukan berapa banyak produk yang siap dibuat.
 
-Isi **Publish Directory** dengan:
+### 2) FEFO untuk pemakaian bahan baku
 
-dist
+Ketika pesanan produk diproses:
 
-### 4. Start Command
+1. Sistem cek kebutuhan bahan baku dari resep.
+2. Sistem pilih batch bahan baku dengan expired terdekat dulu.
+3. `remaining_quantity` batch dikurangi per alokasi.
+4. `stock_movements` dicatat dengan `batch_id` yang terpakai.
 
-Untuk **Static Site**, Render tidak membutuhkan start command.
+Dengan ini risiko bahan expired bisa ditekan.
 
-Jika Render meminta start command karena Anda memilih tipe **Web Service**, gunakan:
+### 3) Expiry bahan baku berbasis batch
 
-npm run preview -- --host 0.0.0.0 --port $PORT
+Di halaman list bahan baku, status expired dan tanggal expired ditarik dari batch aktif (`remaining_quantity > 0`), bukan hanya dari field master item.
 
-Namun rekomendasi utama untuk project ini adalah memakai **Static Site**, bukan Web Service.
+## Entitas Data yang Dipakai
 
-### 5. Kenapa error `ERR_PNPM_OUTDATED_LOCKFILE` bisa terjadi?
+- `items`
+	- Menyimpan master item (`type = product | ingredient`), nama, sku, unit, min stock, photo, status aktif.
+- `products`
+	- Menyimpan metadata produk (harga, kategori, dll).
+	- `production_date` dan `expiry_date` untuk produk diset `null` pada model made-by-order.
+- `product_ingredients`
+	- Resep: relasi produk ke bahan baku + `qty_per_unit`.
+- `stock_batches`
+	- Batch bahan baku: kode batch, tanggal pembelian/produksi, expired, `remaining_quantity`.
+- `stock_movements`
+	- Riwayat movement in/out + `batch_id` (saat movement terkait batch).
+- `activity_logs`
+	- Audit aktivitas user (create/update/delete/stock movement/blocked).
 
-Error ini terjadi karena Render mendeteksi file `pnpm-lock.yaml`, lalu otomatis mencoba install dependency memakai pnpm dengan mode frozen lockfile.
+## Fitur Utama
 
-Jika isi `pnpm-lock.yaml` tidak sama dengan `package.json`, Render akan gagal dengan pesan:
+### Produk
 
-ERR_PNPM_OUTDATED_LOCKFILE
+- Buat produk baru (mode made-by-order).
+- Atur resep produk (komposisi bahan baku per 1 produk).
+- Lihat virtual stock (siap dibuat).
+- Proses pesanan produk:
+	- qty pesanan -> otomatis potong bahan baku -> FEFO.
 
-Solusi yang dipakai project ini adalah:
+### Bahan Baku
 
-- Menghapus `pnpm-lock.yaml`
-- Menggunakan npm untuk deploy
-- Build command menjadi:
+- Buat bahan baku + stok awal batch.
+- Tambah/kurangi stok bahan baku manual.
+- Riwayat batch bahan baku + QR label batch.
+- Hapus batch jika qty tersisa 0.
 
-npm install && npm run build
+### Dashboard
 
-Jika repository GitHub masih menampilkan error yang sama, pastikan perubahan terbaru sudah masuk ke branch yang dipakai Render, yaitu branch `main`.
+- KPI stok produk virtual dan stok bahan baku.
+- Restock alert berdasarkan minimum stock.
+- Ringkasan movement harian.
+- Produk paling banyak keluar.
 
-### 6. Environment Variables
+### Scan QR
 
-Project ini sudah memakai Supabase URL dan publishable key langsung di:
+- Scan batch bahan baku untuk tambah/kurangi stok batch.
+- Produk tidak diproses dari scan pada model made-by-order.
+	- Pesanan produk diproses dari halaman detail produk agar resep dan FEFO berjalan benar.
 
-src/integrations/supabase/client.ts
+### Histori
 
-Jadi tidak wajib menambahkan environment variable untuk menjalankan aplikasi saat ini.
+- Histori movement stok.
+- Histori aktivitas sistem.
 
-### 7. Routing SPA
+## Flow Operasional Rekomendasi
 
-Project ini sudah memiliki file `render.yaml` untuk rewrite React Router.
+1. Buat bahan baku + batch awal di menu bahan baku.
+2. Buat produk.
+3. Atur komposisi produk (resep).
+4. Pantau virtual stock produk di katalog/dashboard.
+5. Saat ada order, buka detail produk -> tab Pesanan -> proses qty.
+6. Sistem memotong bahan baku otomatis dengan FEFO.
+7. Pantau histori movement dan dashboard.
 
-Jika Anda mengatur rewrite manual di dashboard Render, tambahkan:
+## Struktur Halaman Penting
 
-Source:
+- `/` atau `/dashboard` -> Dashboard operasional
+- `/products` -> menu produk
+- `/products/catalogue` -> katalog produk (virtual stock)
+- `/products/catalogue/new` -> tambah produk
+- `/products/catalogue/:id` -> detail produk (data, pesanan, komposisi)
+- `/products/ingredients` -> daftar bahan baku
+- `/products/ingredients/new` -> tambah bahan baku
+- `/products/ingredients/:id` -> detail bahan baku (data, stok & batch)
+- `/scan` -> scan QR batch
+- `/stock` -> histori stok
 
-/*
+## Menjalankan Project (Local)
 
-Destination:
+### Prasyarat
 
-/index.html
+- Node.js 18+
+- npm
 
-Action:
+### Install
 
-Rewrite
+```bash
+npm install
+```
 
-## Supabase Storage setup untuk upload foto produk
+### Development
 
-Jika upload foto produk mengembalikan error `400` pada `/storage/v1/object/item-photos/...`, pastikan bucket `item-photos` sudah ada dan policy storage sudah sesuai.
+```bash
+npm run dev
+```
 
-Jalankan SQL berikut di Supabase SQL Editor:
+### Build Production
 
--- Allow public upload while app has no storage-specific auth policy
-create policy "item_photos_public_insert"
-on storage.objects
-for insert
-to public
-with check (bucket_id = 'item-photos');
+```bash
+npm run build
+```
 
--- Allow public read of uploaded files
-create policy "item_photos_public_select"
-on storage.objects
-for select
-to public
-using (bucket_id = 'item-photos');
+### Preview Build
 
--- Optional: allow public update
-create policy "item_photos_public_update"
-on storage.objects
-for update
-to public
-using (bucket_id = 'item-photos')
-with check (bucket_id = 'item-photos');
+```bash
+npm run preview
+```
 
--- Optional: allow public delete
-create policy "item_photos_public_delete"
-on storage.objects
-for delete
-to public
-using (bucket_id = 'item-photos');
+## Konfigurasi Supabase
 
-## Ringkasan konfigurasi Render
+Client Supabase ada di:
 
-Service Type:
+- `src/integrations/supabase/client.ts`
 
-Static Site
+Project saat ini menggunakan URL dan publishable key langsung di file tersebut.
 
-Build Command:
+Jika ingin lebih aman untuk deployment jangka panjang, pindahkan ke environment variable.
 
-npm install && npm run build
+## Upload Foto
 
-Publish Directory:
+Bucket storage yang dipakai:
 
-dist
+- `item-photos`
 
-Start Command:
+Pastikan policy storage untuk read/write sesuai kebutuhan aplikasi.
 
-Tidak perlu untuk Static Site
+## Deploy Render (Static Site)
+
+- Service type: Static Site
+- Build command: `npm install && npm run build`
+- Publish directory: `dist`
+
+SPA rewrite sudah didukung melalui konfigurasi project.
+
+## Catatan Implementasi
+
+- Movement out bahan baku dari pesanan produk sudah batch-aware dan FEFO.
+- Perubahan `remaining_quantity` batch memakai optimistic check agar aman dari race condition sederhana.
+- Jika batch berubah saat proses, user diminta ulangi aksi.
+
+## Roadmap Saran
+
+- Pindahkan alur FEFO ke Supabase RPC/transaction agar atomic 100% di server.
+- Tambahkan test otomatis untuk:
+	- virtual stock calculation
+	- FEFO allocation
+	- rollback saat konflik batch
+- Tambahkan role-based access (admin/operator).

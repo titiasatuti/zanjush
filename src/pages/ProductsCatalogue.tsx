@@ -3,7 +3,12 @@ import { AppLayout } from "@/components/app-layout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { getExpiryBadgeClass, getExpiryMeta, formatDateId } from "@/lib/expiry-utils";
+import {
+  buildStockMapFromMovements,
+  calculateProductStockFromRecipe,
+  type ProductRecipeRow,
+  type SimpleMovementRow,
+} from "@/lib/stock-utils";
 
 type Product = {
   id: string;
@@ -13,27 +18,17 @@ type Product = {
   category: string | null;
   sell_price: number | null;
   photo_url: string | null;
-  production_date: string | null;
-  expiry_date: string | null;
 };
 
-type Movement = {
-  product_id: string;
-  movement_type: string;
-  quantity: number;
-};
-
-type BatchSummary = {
-  product_id: string;
-};
+type ItemRef = { id: string; type: "product" | "ingredient" };
 
 const isIngredientMirror = (sku: string) => sku.includes("[CAT:") || sku.includes("ING-");
 
 const ProductsCatalogue = () => {
   const [products, setProducts] = useState<Product[]>([]);
-  const [movements, setMovements] = useState<Movement[]>([]);
-  const [batches, setBatches] = useState<BatchSummary[]>([]);
-  const [expiryFilter, setExpiryFilter] = useState<"all" | "near" | "expired">("all");
+  const [movements, setMovements] = useState<SimpleMovementRow[]>([]);
+  const [recipeRows, setRecipeRows] = useState<ProductRecipeRow[]>([]);
+  const [items, setItems] = useState<ItemRef[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
 
@@ -42,17 +37,18 @@ const ProductsCatalogue = () => {
       setIsLoading(true);
       setErrorText("");
 
-      const [productsRes, movementsRes, batchesRes] = await Promise.all([
+      const [productsRes, movementsRes, recipesRes, itemsRes] = await Promise.all([
         supabase
           .from("products")
-          .select("id,name,sku,unit,category,sell_price,photo_url,production_date,expiry_date")
+          .select("id,name,sku,unit,category,sell_price,photo_url")
           .order("created_at", { ascending: false }),
         supabase.from("stock_movements").select("product_id,movement_type,quantity"),
-        supabase.from("stock_batches").select("product_id"),
+        supabase.from("product_ingredients").select("product_id,ingredient_id,qty_per_unit"),
+        supabase.from("items").select("id,type").eq("is_active", true),
       ]);
 
-      if (productsRes.error || movementsRes.error || batchesRes.error) {
-        setErrorText(productsRes.error?.message || movementsRes.error?.message || batchesRes.error?.message || "Gagal memuat produk");
+      if (productsRes.error || movementsRes.error || recipesRes.error || itemsRes.error) {
+        setErrorText(productsRes.error?.message || movementsRes.error?.message || recipesRes.error?.message || itemsRes.error?.message || "Gagal memuat produk");
         setIsLoading(false);
         return;
       }
@@ -61,37 +57,30 @@ const ProductsCatalogue = () => {
       const catalogueOnly = allProducts.filter((p) => !isIngredientMirror(p.sku) && p.category !== "Diarsipkan");
 
       setProducts(catalogueOnly);
-      setMovements((movementsRes.data as Movement[]) || []);
-      setBatches((batchesRes.data as BatchSummary[]) || []);
+      setMovements((movementsRes.data as SimpleMovementRow[]) || []);
+      setRecipeRows((recipesRes.data as ProductRecipeRow[]) || []);
+      setItems((itemsRes.data as ItemRef[]) || []);
       setIsLoading(false);
     };
     load();
   }, []);
 
-  const stockByProduct = useMemo(() => {
+  const ingredientIds = useMemo(() => {
+    return new Set(items.filter((item) => item.type === "ingredient").map((item) => item.id));
+  }, [items]);
+
+  const ingredientStockMap = useMemo(() => {
+    const allStockMap = buildStockMapFromMovements(movements);
     const map = new Map<string, number>();
-    movements.forEach((m) => {
-      const sign = ["in", "return", "adjust"].includes(m.movement_type) ? 1 : -1;
-      map.set(m.product_id, (map.get(m.product_id) || 0) + sign * m.quantity);
+    ingredientIds.forEach((id) => {
+      map.set(id, allStockMap.get(id) || 0);
     });
     return map;
-  }, [movements]);
-
-  const filteredProducts = useMemo(() => {
-    if (expiryFilter === "all") return products;
-
-    return products.filter((product) => {
-      const meta = getExpiryMeta(product.expiry_date);
-      if (expiryFilter === "expired") {
-        return meta.status === "expired" || meta.status === "today";
-      }
-      return meta.status === "near";
-    });
-  }, [products, expiryFilter]);
+  }, [movements, ingredientIds]);
 
   const productsByCategory = useMemo(() => {
     const grouped = new Map<string, Product[]>();
-    filteredProducts.forEach((product) => {
+    products.forEach((product) => {
       const category = product.category?.trim() || "Tanpa Kategori";
       if (!grouped.has(category)) {
         grouped.set(category, []);
@@ -99,15 +88,7 @@ const ProductsCatalogue = () => {
       grouped.get(category)!.push(product);
     });
     return Array.from(grouped.entries());
-  }, [filteredProducts]);
-
-  const batchCountByItem = useMemo(() => {
-    const map = new Map<string, number>();
-    batches.forEach((batch) => {
-      map.set(batch.product_id, (map.get(batch.product_id) || 0) + 1);
-    });
-    return map;
-  }, [batches]);
+  }, [products]);
 
   return (
     <AppLayout title="Produk" backTo="/products">
@@ -115,19 +96,6 @@ const ProductsCatalogue = () => {
         <Button asChild className="rounded-xl bg-emerald-500 hover:bg-emerald-600">
           <Link to="/products/catalogue/new">Buat Produk Baru</Link>
         </Button>
-
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter Expired</span>
-          <select
-            className="h-10 rounded-xl border px-3 text-sm"
-            value={expiryFilter}
-            onChange={(event) => setExpiryFilter(event.target.value as "all" | "near" | "expired")}
-          >
-            <option value="all">Semua</option>
-            <option value="near">Hampir expired (maks. 3 hari)</option>
-            <option value="expired">Sudah expired</option>
-          </select>
-        </div>
       </div>
 
       {isLoading ? (
@@ -145,9 +113,10 @@ const ProductsCatalogue = () => {
 
               <div className="space-y-3">
                 {categoryProducts.map((p) => {
-                  const expiry = getExpiryMeta(p.expiry_date);
-                  const stock = stockByProduct.get(p.id) || 0;
-                  const batchCount = batchCountByItem.get(p.id) || 0;
+                  const stock = calculateProductStockFromRecipe(p.id, recipeRows, ingredientStockMap);
+                  const productRecipeRows = recipeRows.filter((row) => row.product_id === p.id);
+                  const ingredientCount = productRecipeRows.length;
+                  const totalQtyPerUnit = productRecipeRows.reduce((sum, row) => sum + row.qty_per_unit, 0);
 
                   return (
                     <Link key={p.id} to={`/products/catalogue/${p.id}`} className="block rounded-3xl border bg-white p-3 shadow-sm transition hover:shadow-md">
@@ -170,30 +139,28 @@ const ProductsCatalogue = () => {
                                 {typeof p.sell_price === "number" ? `Rp ${p.sell_price.toLocaleString()}` : "Harga belum diatur"}
                               </p>
                             </div>
-                            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${getExpiryBadgeClass(expiry.status)}`}>
-                              {expiry.label}
+                            <span className="shrink-0 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                              Siap dibuat: {stock}
                             </span>
                           </div>
 
-                          <div className="mt-3 grid grid-cols-3 gap-2">
+                          <div className="mt-3 grid grid-cols-2 gap-2">
                             <div className="rounded-xl bg-slate-50 px-3 py-2">
-                              <p className="text-[11px] uppercase tracking-wide text-slate-500">Stok</p>
-                              <p className="text-sm font-semibold text-slate-900">{stock}</p>
+                              <p className="text-[11px] uppercase tracking-wide text-slate-500">Kebutuhan per Produk</p>
+                              <p className="truncate text-sm font-semibold text-slate-900">
+                                {ingredientCount > 0 ? totalQtyPerUnit.toLocaleString() : "Belum ada resep"}
+                              </p>
                             </div>
                             <div className="rounded-xl bg-indigo-50 px-3 py-2">
-                              <p className="text-[11px] uppercase tracking-wide text-indigo-500">Batch</p>
-                              <p className="text-sm font-semibold text-indigo-700">{batchCount}</p>
-                            </div>
-                            <div className="rounded-xl bg-slate-50 px-3 py-2">
-                              <p className="text-[11px] uppercase tracking-wide text-slate-500">Expired</p>
-                              <p className="truncate text-sm font-semibold text-slate-900">{formatDateId(p.expiry_date)}</p>
+                              <p className="text-[11px] uppercase tracking-wide text-indigo-500">Komposisi</p>
+                              <p className="text-sm font-semibold text-indigo-700">{ingredientCount} bahan</p>
                             </div>
                           </div>
 
                           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
                             <span>SKU: {p.sku}</span>
                             <span>Unit: {p.unit}</span>
-                            <span>Produksi: {formatDateId(p.production_date)}</span>
+                            <span>Model: made-by-order</span>
                           </div>
                         </div>
                       </div>
@@ -204,7 +171,7 @@ const ProductsCatalogue = () => {
             </section>
           ))}
 
-          {!filteredProducts.length && <p className="text-sm text-slate-500">Tidak ada produk pada filter ini.</p>}
+          {!products.length && <p className="text-sm text-slate-500">Tidak ada produk tersimpan.</p>}
         </div>
       )}
     </AppLayout>

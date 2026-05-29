@@ -128,6 +128,11 @@ const Scan = () => {
 
     setIsPosting(true);
 
+    if (resolved.kind === "product") {
+      setIsPosting(false);
+      return showError("Produk dibuat per pesanan. Gunakan halaman detail produk untuk proses pesanan.");
+    }
+
     if (type === "out") {
       const stockCheck = await canReduceStock(resolved.id, safeQty);
       if (!stockCheck.allowed) {
@@ -142,6 +147,38 @@ const Scan = () => {
       }
     }
 
+    const { data: currentBatch, error: batchReadError } = await supabase
+      .from("stock_batches")
+      .select("id,remaining_quantity")
+      .eq("id", resolved.batchId)
+      .single();
+
+    if (batchReadError || !currentBatch) {
+      setIsPosting(false);
+      return showError(batchReadError?.message || "Batch tidak ditemukan");
+    }
+
+    const previousRemaining = currentBatch.remaining_quantity;
+    const nextRemaining = type === "in" ? previousRemaining + safeQty : previousRemaining - safeQty;
+
+    if (type === "out" && nextRemaining < 0) {
+      setIsPosting(false);
+      return showError(`Qty batch tidak cukup. Sisa batch: ${previousRemaining}`);
+    }
+
+    const { data: updatedBatch, error: batchUpdateError } = await supabase
+      .from("stock_batches")
+      .update({ remaining_quantity: nextRemaining })
+      .eq("id", resolved.batchId)
+      .eq("remaining_quantity", previousRemaining)
+      .select("id")
+      .single();
+
+    if (batchUpdateError || !updatedBatch) {
+      setIsPosting(false);
+      return showError("Batch berubah saat diproses. Silakan ulang scan.");
+    }
+
     const { error } = await supabase.from("stock_movements").insert({
       product_id: resolved.id,
       batch_id: resolved.batchId,
@@ -151,6 +188,10 @@ const Scan = () => {
     });
 
     if (error) {
+      await supabase
+        .from("stock_batches")
+        .update({ remaining_quantity: previousRemaining })
+        .eq("id", resolved.batchId);
       setIsPosting(false);
       return showError(error.message);
     }
@@ -159,7 +200,7 @@ const Scan = () => {
     setResolved({ ...resolved, stock: newStock });
     await logActivity(
       type === "in" ? "scan_stock_in" : "scan_stock_out",
-      `Scan ${type === "in" ? "tambah" : "kurangi"} stok ${resolved.name} sebanyak ${safeQty}`,
+      `Scan ${type === "in" ? "tambah" : "kurangi"} stok ${resolved.name} sebanyak ${safeQty} pada batch`,
     );
     showSuccess(type === "in" ? "Stok berhasil ditambah" : "Stok berhasil dikurangi");
     setIsPosting(false);
@@ -267,23 +308,29 @@ const Scan = () => {
                 </div>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Button
-                  onClick={() => postMovement("in")}
-                  disabled={isPosting}
-                  className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600"
-                >
-                  Tambah Stok
-                </Button>
-                <Button
-                  onClick={() => postMovement("out")}
-                  disabled={isPosting}
-                  variant="secondary"
-                  className="h-12 rounded-xl"
-                >
-                  Kurangi Stok
-                </Button>
-              </div>
+              {resolved.kind === "ingredient" ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button
+                    onClick={() => postMovement("in")}
+                    disabled={isPosting}
+                    className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600"
+                  >
+                    Tambah Stok Batch
+                  </Button>
+                  <Button
+                    onClick={() => postMovement("out")}
+                    disabled={isPosting}
+                    variant="secondary"
+                    className="h-12 rounded-xl"
+                  >
+                    Kurangi Stok Batch
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+                  Produk bersifat made-by-order. Proses pesanan produk dilakukan dari halaman detail produk agar bahan baku otomatis terpakai (FEFO).
+                </div>
+              )}
 
               <Button type="button" variant="ghost" onClick={closeResult} className="w-full rounded-xl">
                 Selesai & Scan Lagi

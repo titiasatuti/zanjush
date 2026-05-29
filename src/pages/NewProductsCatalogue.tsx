@@ -19,11 +19,8 @@ const NewProductsCatalogue = () => {
   const [category, setCategory] = useState("Tanpa Kategori");
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
   const [unit, setUnit] = useState("Pcs");
-  const [currentStock, setCurrentStock] = useState("");
   const [costPrice, setCostPrice] = useState("");
   const [minStock, setMinStock] = useState("10");
-  const [productionDate, setProductionDate] = useState("");
-  const [expiryDate, setExpiryDate] = useState("");
   const [itemCode, setItemCode] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -61,13 +58,6 @@ const NewProductsCatalogue = () => {
     const minStockNumber = Number(minStock || 0);
     if (Number.isNaN(minStockNumber) || minStockNumber < 0) return showError("Minimum stok tidak valid");
 
-    const stockNumber = Number(currentStock || 0);
-    if (Number.isNaN(stockNumber) || stockNumber < 0) return showError("Stok awal tidak valid");
-
-    if (productionDate && expiryDate && expiryDate < productionDate) {
-      return showError("Tanggal expired tidak boleh lebih awal dari tanggal pembuatan");
-    }
-
     setIsSaving(true);
 
     const uploadedPhotoUrl = await uploadPhoto();
@@ -90,8 +80,8 @@ const NewProductsCatalogue = () => {
         category: cleanCategory,
         sell_price: sellPrice ? Number(sellPrice) : null,
         cost_price: costPrice ? Number(costPrice) : null,
-        production_date: productionDate || null,
-        expiry_date: expiryDate || null,
+        production_date: null,
+        expiry_date: null,
         photo_url: uploadedPhotoUrl,
       })
       .select("id")
@@ -116,44 +106,6 @@ const NewProductsCatalogue = () => {
     if (itemError) {
       setIsSaving(false);
       return showError(itemError.message);
-    }
-
-    if (stockNumber > 0) {
-      const sourceDate = productionDate || new Date().toISOString().slice(0, 10);
-      const resolvedExpiryDate = expiryDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-      const { data: insertedBatch, error: batchError } = await supabase
-        .from("stock_batches")
-        .insert({
-          product_id: insertedProduct.id,
-          batch_code: `PROD-${Date.now()}`,
-          production_date: sourceDate,
-          expiry_date: resolvedExpiryDate,
-          initial_quantity: stockNumber,
-          remaining_quantity: stockNumber,
-          note: "Batch awal saat produk dibuat",
-          qr_payload: crypto.randomUUID().replace(/-/g, ""),
-        })
-        .select("id")
-        .single();
-
-      if (batchError || !insertedBatch) {
-        setIsSaving(false);
-        return showError(batchError?.message || "Gagal membuat batch awal produk");
-      }
-
-      const { error: movementError } = await supabase.from("stock_movements").insert({
-        product_id: insertedProduct.id,
-        batch_id: insertedBatch.id,
-        movement_type: "in",
-        quantity: stockNumber,
-        note: "Stok awal saat produk dibuat",
-      });
-
-      if (movementError) {
-        setIsSaving(false);
-        return showError(movementError.message);
-      }
     }
 
     await logActivity("create_product", `Membuat produk: ${name} (${finalCode})`);
@@ -244,24 +196,8 @@ const NewProductsCatalogue = () => {
                 />
               </div>
 
-              <div>
-                <Label className="text-sm font-semibold text-slate-700">Stok awal</Label>
-                <Input className="mt-1 h-12 rounded-2xl text-base" type="number" min={0} value={currentStock} onChange={(e) => setCurrentStock(e.target.value)} placeholder="0" />
-              </div>
-
-              <div className="sm:col-span-2 rounded-2xl bg-slate-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tracking umur produk</p>
-                <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <Label className="text-sm font-semibold text-slate-700">Tanggal pembuatan</Label>
-                    <Input className="mt-1 h-12 rounded-2xl bg-white text-base" type="date" value={productionDate} onChange={(e) => setProductionDate(e.target.value)} />
-                  </div>
-
-                  <div>
-                    <Label className="text-sm font-semibold text-slate-700">Tanggal expired</Label>
-                    <Input className="mt-1 h-12 rounded-2xl bg-white text-base" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
-                  </div>
-                </div>
+              <div className="sm:col-span-2 rounded-2xl bg-slate-50 p-3 text-sm text-slate-600">
+                Produk bersifat made-by-order. Stok produk dihitung otomatis dari ketersediaan bahan baku di komposisi.
               </div>
 
               <div className="sm:col-span-2">

@@ -6,6 +6,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, Beaker, Box, Clock3, ShieldAlert, ShoppingCart } from "lucide-react";
 import { formatDateId, getExpiryBadgeClass, getExpiryMeta } from "@/lib/expiry-utils";
+import {
+  buildStockMapFromMovements,
+  calculateProductStockFromRecipe,
+  type ProductRecipeRow,
+  type SimpleMovementRow,
+} from "@/lib/stock-utils";
 
 type InventoryItem = {
   id: string;
@@ -16,14 +22,6 @@ type InventoryItem = {
   expiry_date: string | null;
 };
 
-type ProductExpiryItem = {
-  id: string;
-  name: string;
-  production_date: string | null;
-  expiry_date: string | null;
-  category: string | null;
-};
-
 type Movement = {
   id: string;
   product_id: string;
@@ -32,8 +30,12 @@ type Movement = {
   created_at?: string;
 };
 
+type RecipeRow = ProductRecipeRow;
+
 type BatchSummary = {
   product_id: string;
+  expiry_date: string | null;
+  remaining_quantity: number;
 };
 
 const incomingTypes = ["in", "return", "adjust"];
@@ -41,9 +43,9 @@ const STOCK_PAGE_SIZE = 5;
 
 const Dashboard = () => {
   const [items, setItems] = useState<InventoryItem[]>([]);
-  const [productExpiryItems, setProductExpiryItems] = useState<ProductExpiryItem[]>([]);
   const [batches, setBatches] = useState<BatchSummary[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [recipeRows, setRecipeRows] = useState<RecipeRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
   const [productStockPage, setProductStockPage] = useState(1);
@@ -54,28 +56,26 @@ const Dashboard = () => {
       setIsLoading(true);
       setErrorText("");
 
-      const [itemsRes, productsRes, movementsRes, batchesRes] = await Promise.all([
+      const [itemsRes, movementsRes, batchesRes, recipesRes] = await Promise.all([
         supabase
           .from("items")
           .select("id,name,type,min_stock,last_purchase_date,expiry_date")
           .eq("is_active", true),
-        supabase
-          .from("products")
-          .select("id,name,production_date,expiry_date,category"),
         supabase.from("stock_movements").select("id,product_id,movement_type,quantity,created_at"),
-        supabase.from("stock_batches").select("product_id"),
+        supabase.from("stock_batches").select("product_id,expiry_date,remaining_quantity"),
+        supabase.from("product_ingredients").select("product_id,ingredient_id,qty_per_unit"),
       ]);
 
-      if (itemsRes.error || productsRes.error || movementsRes.error || batchesRes.error) {
-        setErrorText(itemsRes.error?.message || productsRes.error?.message || movementsRes.error?.message || batchesRes.error?.message || "Gagal memuat dashboard");
+      if (itemsRes.error || movementsRes.error || batchesRes.error || recipesRes.error) {
+        setErrorText(itemsRes.error?.message || movementsRes.error?.message || batchesRes.error?.message || recipesRes.error?.message || "Gagal memuat dashboard");
         setIsLoading(false);
         return;
       }
 
       setItems((itemsRes.data as InventoryItem[]) || []);
-      setProductExpiryItems((productsRes.data as ProductExpiryItem[]) || []);
       setMovements((movementsRes.data as Movement[]) || []);
       setBatches((batchesRes.data as BatchSummary[]) || []);
+      setRecipeRows((recipesRes.data as RecipeRow[]) || []);
       setIsLoading(false);
     };
 
@@ -83,14 +83,28 @@ const Dashboard = () => {
   }, []);
 
   const stockMap = useMemo(() => {
-    const map = new Map<string, number>();
-    movements.forEach((m) => {
-      if (!m.product_id) return;
-      const sign = incomingTypes.includes(m.movement_type) ? 1 : -1;
-      map.set(m.product_id, (map.get(m.product_id) || 0) + sign * m.quantity);
-    });
-    return map;
+    return buildStockMapFromMovements(movements as SimpleMovementRow[]);
   }, [movements]);
+
+  const ingredientStockMap = useMemo(() => {
+    const map = new Map<string, number>();
+    items
+      .filter((item) => item.type === "ingredient")
+      .forEach((item) => {
+        map.set(item.id, stockMap.get(item.id) || 0);
+      });
+    return map;
+  }, [items, stockMap]);
+
+  const productDerivedStockMap = useMemo(() => {
+    const map = new Map<string, number>();
+    items
+      .filter((item) => item.type === "product")
+      .forEach((item) => {
+        map.set(item.id, calculateProductStockFromRecipe(item.id, recipeRows, ingredientStockMap));
+      });
+    return map;
+  }, [items, recipeRows, ingredientStockMap]);
 
   const itemMap = useMemo(() => {
     const map = new Map<string, InventoryItem>();
@@ -161,10 +175,10 @@ const Dashboard = () => {
       .filter((item) => item.type === "product")
       .map((item) => ({
         ...item,
-        stock: stockMap.get(item.id) || 0,
+        stock: productDerivedStockMap.get(item.id) || 0,
       }))
       .sort((a, b) => b.stock - a.stock);
-  }, [items, stockMap]);
+  }, [items, productDerivedStockMap]);
 
   const ingredientStockSummary = useMemo(() => {
     return items
@@ -205,39 +219,34 @@ const Dashboard = () => {
     return items
       .map((item) => ({
         ...item,
-        stock: stockMap.get(item.id) || 0,
+        stock: item.type === "product" ? productDerivedStockMap.get(item.id) || 0 : stockMap.get(item.id) || 0,
         threshold: item.min_stock > 0 ? item.min_stock : 10,
       }))
       .filter((item) => item.stock < item.threshold)
       .sort((a, b) => a.stock - b.stock);
-  }, [items, stockMap]);
-
-  const expiringProducts = useMemo(() => {
-    return productExpiryItems
-      .filter((item) => item.category !== "Diarsipkan")
-      .map((item) => {
-        const meta = getExpiryMeta(item.expiry_date);
-        return {
-          ...item,
-          ...meta,
-        };
-      })
-      .filter((item) => item.status === "expired" || item.status === "today" || item.status === "near")
-      .sort((a, b) => {
-        const aDays = a.daysRemaining ?? Number.MAX_SAFE_INTEGER;
-        const bDays = b.daysRemaining ?? Number.MAX_SAFE_INTEGER;
-        return aDays - bDays;
-      })
-      .slice(0, 8);
-  }, [productExpiryItems]);
+  }, [items, stockMap, productDerivedStockMap]);
 
   const expiringIngredients = useMemo(() => {
+    const nearestExpiryByIngredient = new Map<string, string | null>();
+
+    batches
+      .filter((batch) => batch.remaining_quantity > 0)
+      .forEach((batch) => {
+        if (!batch.expiry_date) return;
+        const current = nearestExpiryByIngredient.get(batch.product_id);
+        if (!current || new Date(batch.expiry_date) < new Date(current)) {
+          nearestExpiryByIngredient.set(batch.product_id, batch.expiry_date);
+        }
+      });
+
     return items
       .filter((item) => item.type === "ingredient")
       .map((item) => {
-        const meta = getExpiryMeta(item.expiry_date);
+        const nearestBatchExpiry = nearestExpiryByIngredient.get(item.id) || item.expiry_date;
+        const meta = getExpiryMeta(nearestBatchExpiry);
         return {
           ...item,
+          resolved_expiry_date: nearestBatchExpiry,
           ...meta,
         };
       })
@@ -248,21 +257,23 @@ const Dashboard = () => {
         return aDays - bDays;
       })
       .slice(0, 8);
-  }, [items]);
+  }, [items, batches]);
 
   const batchCountByItem = useMemo(() => {
     const map = new Map<string, number>();
-    batches.forEach((batch) => {
+    batches
+      .filter((batch) => batch.remaining_quantity > 0)
+      .forEach((batch) => {
       map.set(batch.product_id, (map.get(batch.product_id) || 0) + 1);
-    });
+      });
     return map;
   }, [batches]);
 
   const detailPath = (item: InventoryItem) =>
     item.type === "ingredient" ? `/products/ingredients/${item.id}` : `/products/catalogue/${item.id}`;
 
-  const expiringSoonTotal = expiringProducts.length + expiringIngredients.length;
-  const criticalAlerts = expiringProducts.length;
+  const expiringSoonTotal = expiringIngredients.length;
+  const criticalAlerts = expiringIngredients.length;
 
   return (
     <AppLayout title="Dasbor">
@@ -282,7 +293,7 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent className="flex items-end justify-between">
                 <span className="text-3xl font-bold text-rose-700">{criticalAlerts}</span>
-                <span className="text-xs text-rose-600">Produk Expire</span>
+                <span className="text-xs text-rose-600">Bahan Mendekati Expire</span>
               </CardContent>
             </Card>
 
@@ -308,7 +319,7 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent className="flex items-end justify-between">
                 <span className="text-3xl font-bold text-violet-700">{expiringSoonTotal}</span>
-                <span className="text-xs text-violet-700">produk + bahan</span>
+                <span className="text-xs text-violet-700">bahan baku</span>
               </CardContent>
             </Card>
           </div>
@@ -333,7 +344,7 @@ const Dashboard = () => {
                         >
                           <div>
                             <span className="font-medium text-slate-800">{item.name}</span>
-                            <p className="mt-0.5 text-xs text-slate-500">Batch: {batchCountByItem.get(item.id) || 0}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">Stok virtual berbasis komposisi</p>
                           </div>
                           <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                             {item.stock}
@@ -465,36 +476,11 @@ const Dashboard = () => {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl border-violet-100">
+            <Card className="rounded-2xl border-violet-100 lg:col-span-1">
               <CardHeader>
                 <CardTitle className="text-base">Mendekati Expire</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Produk</p>
-                  {expiringProducts.length ? (
-                    <div className="space-y-2">
-                      {expiringProducts.slice(0, 5).map((item) => (
-                        <Link
-                          key={item.id}
-                          to={`/products/catalogue/${item.id}`}
-                          className="flex items-center justify-between gap-2 rounded-xl border bg-slate-50 px-3 py-2 text-sm transition hover:bg-slate-100"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold text-slate-900">{item.name}</p>
-                            <p className="text-xs text-slate-500">Exp: {formatDateId(item.expiry_date)}</p>
-                          </div>
-                          <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${getExpiryBadgeClass(item.status)}`}>
-                            {item.label}
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-500">Tidak ada produk mendekati expired.</p>
-                  )}
-                </div>
-
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Ingredients</p>
                   {expiringIngredients.length ? (
@@ -507,7 +493,7 @@ const Dashboard = () => {
                         >
                           <div className="min-w-0">
                             <p className="truncate font-semibold text-slate-900">{item.name}</p>
-                            <p className="text-xs text-slate-500">Exp: {formatDateId(item.expiry_date)}</p>
+                            <p className="text-xs text-slate-500">Exp: {formatDateId(item.resolved_expiry_date)}</p>
                           </div>
                           <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${getExpiryBadgeClass(item.status)}`}>
                             {item.label}

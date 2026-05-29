@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import type { ReactElement } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Toaster } from "@/components/ui/toaster";
@@ -7,22 +7,29 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
-import Products from "./pages/Products";
-import Scan from "./pages/Scan";
-import ProductsCatalogue from "./pages/ProductsCatalogue";
-import NewProductsCatalogue from "./pages/NewProductsCatalogue";
-import Ingredients from "./pages/Ingredients";
-import NewIngredients from "./pages/NewIngredients";
 import Login from "./pages/Login";
-import ProductDetail from "./pages/ProductDetail";
-import IngredientDetail from "./pages/IngredientDetail";
-import Stock from "./pages/Stock";
-import PrintLabel from "./pages/PrintLabel";
-import SettingsPage from "./pages/Settings";
+
+const Index = lazy(() => import("./pages/Index"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Products = lazy(() => import("./pages/Products"));
+const Scan = lazy(() => import("./pages/Scan"));
+const ProductsCatalogue = lazy(() => import("./pages/ProductsCatalogue"));
+const NewProductsCatalogue = lazy(() => import("./pages/NewProductsCatalogue"));
+const Ingredients = lazy(() => import("./pages/Ingredients"));
+const NewIngredients = lazy(() => import("./pages/NewIngredients"));
+const ProductDetail = lazy(() => import("./pages/ProductDetail"));
+const IngredientDetail = lazy(() => import("./pages/IngredientDetail"));
+const Stock = lazy(() => import("./pages/Stock"));
+const PrintLabel = lazy(() => import("./pages/PrintLabel"));
+const SettingsPage = lazy(() => import("./pages/Settings"));
 
 const queryClient = new QueryClient();
+
+const RouteLoader = () => (
+  <div className="flex min-h-screen items-center justify-center bg-slate-50">
+    <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">Memuat halaman...</div>
+  </div>
+);
 
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
@@ -67,25 +74,27 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login isAuthenticated={isAuthenticated} />} />
-            <Route path="/" element={protectedElement(<Index />)} />
-            <Route path="/products" element={protectedElement(<Products />)} />
-            <Route path="/products/catalogue" element={protectedElement(<ProductsCatalogue />)} />
-            <Route path="/products/catalogue/:id" element={protectedElement(<ProductDetail />)} />
-            <Route path="/products/catalogue/new" element={protectedElement(<NewProductsCatalogue />)} />
-            <Route path="/products/catalougue/new" element={<Navigate to="/products/catalogue/new" replace />} />
-            <Route path="/products/ingredients" element={protectedElement(<Ingredients />)} />
-            <Route path="/products/ingredients/:id" element={protectedElement(<IngredientDetail />)} />
-            <Route path="/products/ingredients/new" element={protectedElement(<NewIngredients />)} />
-            <Route path="/scan" element={protectedElement(<Scan />)} />
-            <Route path="/print-label" element={protectedElement(<PrintLabel />)} />
-            <Route path="/labels" element={<Navigate to="/products" replace />} />
-            <Route path="/stock" element={protectedElement(<Stock />)} />
-            <Route path="/history" element={<Navigate to="/stock" replace />} />
-            <Route path="/pengaturan" element={protectedElement(<SettingsPage />)} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Suspense fallback={<RouteLoader />}>
+            <Routes>
+              <Route path="/login" element={<Login isAuthenticated={isAuthenticated} />} />
+              <Route path="/" element={protectedElement(<Index />)} />
+              <Route path="/products" element={protectedElement(<Products />)} />
+              <Route path="/products/catalogue" element={protectedElement(<ProductsCatalogue />)} />
+              <Route path="/products/catalogue/:id" element={protectedElement(<ProductDetail />)} />
+              <Route path="/products/catalogue/new" element={protectedElement(<NewProductsCatalogue />)} />
+              <Route path="/products/catalougue/new" element={<Navigate to="/products/catalogue/new" replace />} />
+              <Route path="/products/ingredients" element={protectedElement(<Ingredients />)} />
+              <Route path="/products/ingredients/:id" element={protectedElement(<IngredientDetail />)} />
+              <Route path="/products/ingredients/new" element={protectedElement(<NewIngredients />)} />
+              <Route path="/scan" element={protectedElement(<Scan />)} />
+              <Route path="/print-label" element={protectedElement(<PrintLabel />)} />
+              <Route path="/labels" element={<Navigate to="/products" replace />} />
+              <Route path="/stock" element={protectedElement(<Stock />)} />
+              <Route path="/history" element={<Navigate to="/stock" replace />} />
+              <Route path="/pengaturan" element={protectedElement(<SettingsPage />)} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

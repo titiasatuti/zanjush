@@ -24,6 +24,8 @@ type Movement = {
 
 type BatchSummary = {
   product_id: string;
+  expiry_date: string | null;
+  remaining_quantity: number;
 };
 
 const readCategoryFromSku = (sku: string) => {
@@ -52,7 +54,7 @@ const Ingredients = () => {
           .eq("is_active", true)
           .order("created_at", { ascending: false }),
         supabase.from("stock_movements").select("product_id,movement_type,quantity,note"),
-        supabase.from("stock_batches").select("product_id"),
+        supabase.from("stock_batches").select("product_id,expiry_date,remaining_quantity"),
       ]);
 
       if (itemsRes.error || movementsRes.error || batchesRes.error) {
@@ -81,16 +83,29 @@ const Ingredients = () => {
   }, [movements]);
 
   const filteredIngredients = useMemo(() => {
+    const nearestExpiryMap = new Map<string, string | null>();
+
+    batches
+      .filter((batch) => batch.remaining_quantity > 0)
+      .forEach((batch) => {
+        if (!batch.expiry_date) return;
+        const current = nearestExpiryMap.get(batch.product_id);
+        if (!current || new Date(batch.expiry_date) < new Date(current)) {
+          nearestExpiryMap.set(batch.product_id, batch.expiry_date);
+        }
+      });
+
     if (expiryFilter === "all") return ingredients;
 
     return ingredients.filter((item) => {
-      const meta = getExpiryMeta(item.expiry_date);
+      const batchExpiryDate = nearestExpiryMap.get(item.id) || item.expiry_date;
+      const meta = getExpiryMeta(batchExpiryDate);
       if (expiryFilter === "expired") {
         return meta.status === "expired" || meta.status === "today";
       }
       return meta.status === "near";
     });
-  }, [ingredients, expiryFilter]);
+  }, [ingredients, expiryFilter, batches]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Ingredient[]>();
@@ -104,9 +119,28 @@ const Ingredients = () => {
 
   const batchCountByItem = useMemo(() => {
     const map = new Map<string, number>();
-    batches.forEach((batch) => {
+    batches
+      .filter((batch) => batch.remaining_quantity > 0)
+      .forEach((batch) => {
       map.set(batch.product_id, (map.get(batch.product_id) || 0) + 1);
-    });
+      });
+    return map;
+  }, [batches]);
+
+  const nearestExpiryByItem = useMemo(() => {
+    const map = new Map<string, string | null>();
+
+    batches
+      .filter((batch) => batch.remaining_quantity > 0)
+      .forEach((batch) => {
+        if (!batch.expiry_date) return;
+
+        const current = map.get(batch.product_id);
+        if (!current || new Date(batch.expiry_date) < new Date(current)) {
+          map.set(batch.product_id, batch.expiry_date);
+        }
+      });
+
     return map;
   }, [batches]);
 
@@ -146,7 +180,8 @@ const Ingredients = () => {
 
               <div className="space-y-3">
                 {items.map((item) => {
-                  const expiry = getExpiryMeta(item.expiry_date);
+                  const batchExpiryDate = nearestExpiryByItem.get(item.id) || item.expiry_date;
+                  const expiry = getExpiryMeta(batchExpiryDate);
                   const stock = stockByItem.get(item.id) || 0;
                   const batchCount = batchCountByItem.get(item.id) || 0;
 
@@ -185,7 +220,7 @@ const Ingredients = () => {
                             </div>
                             <div className="rounded-xl bg-slate-50 px-3 py-2">
                               <p className="text-[11px] uppercase tracking-wide text-slate-500">Expired</p>
-                              <p className="truncate text-sm font-semibold text-slate-900">{formatDateId(item.expiry_date)}</p>
+                              <p className="truncate text-sm font-semibold text-slate-900">{formatDateId(batchExpiryDate)}</p>
                             </div>
                           </div>
 

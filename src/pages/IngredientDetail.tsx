@@ -78,6 +78,28 @@ const IngredientDetail = () => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(labelPayload)}`;
   }, [labelPayload]);
 
+  const activeBatches = useMemo(() => {
+    return batches.filter((batch) => batch.remaining_quantity > 0);
+  }, [batches]);
+
+  const nearestBatchExpiryDate = useMemo(() => {
+    if (!activeBatches.length) return null;
+    return activeBatches.reduce<string | null>((nearest, batch) => {
+      if (!batch.expiry_date) return nearest;
+      if (!nearest) return batch.expiry_date;
+      return new Date(batch.expiry_date) < new Date(nearest) ? batch.expiry_date : nearest;
+    }, null);
+  }, [activeBatches]);
+
+  const latestBatchPurchaseDate = useMemo(() => {
+    if (!activeBatches.length) return null;
+    return activeBatches.reduce<string | null>((latest, batch) => {
+      if (!batch.production_date) return latest;
+      if (!latest) return batch.production_date;
+      return new Date(batch.production_date) > new Date(latest) ? batch.production_date : latest;
+    }, null);
+  }, [activeBatches]);
+
   const loadMovements = async () => {
     if (!id) return;
 
@@ -323,21 +345,97 @@ const IngredientDetail = () => {
       return showError(`Stok tidak cukup. Stok tersedia: ${stockCheck.currentStock}`);
     }
 
-    const { error } = await supabase.from("stock_movements").insert({
+    const sortedBatches = batches
+      .filter((batch) => batch.remaining_quantity > 0)
+      .slice()
+      .sort((a, b) => {
+        const aExpiry = a.expiry_date ? new Date(a.expiry_date).getTime() : Number.MAX_SAFE_INTEGER;
+        const bExpiry = b.expiry_date ? new Date(b.expiry_date).getTime() : Number.MAX_SAFE_INTEGER;
+        if (aExpiry !== bExpiry) return aExpiry - bExpiry;
+
+        const aProd = a.production_date ? new Date(a.production_date).getTime() : Number.MAX_SAFE_INTEGER;
+        const bProd = b.production_date ? new Date(b.production_date).getTime() : Number.MAX_SAFE_INTEGER;
+        if (aProd !== bProd) return aProd - bProd;
+
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+
+    let remainingNeed = qty;
+    const allocations: Array<{ batchId: string; batchCode: string; quantity: number; previousRemaining: number; nextRemaining: number }> = [];
+
+    for (const batch of sortedBatches) {
+      if (remainingNeed <= 0) break;
+      const takeQty = Math.min(batch.remaining_quantity, remainingNeed);
+      if (takeQty <= 0) continue;
+
+      allocations.push({
+        batchId: batch.id,
+        batchCode: batch.batch_code,
+        quantity: takeQty,
+        previousRemaining: batch.remaining_quantity,
+        nextRemaining: batch.remaining_quantity - takeQty,
+      });
+
+      remainingNeed -= takeQty;
+    }
+
+    if (remainingNeed > 0) {
+      setStockActionLoading(null);
+      return showError("Batch bahan baku tidak cukup untuk dipotong");
+    }
+
+    const appliedBatchUpdates: Array<{ batchId: string; previousRemaining: number }> = [];
+
+    for (const allocation of allocations) {
+      const { data: updatedBatch, error: batchUpdateError } = await supabase
+        .from("stock_batches")
+        .update({ remaining_quantity: allocation.nextRemaining })
+        .eq("id", allocation.batchId)
+        .eq("remaining_quantity", allocation.previousRemaining)
+        .select("id")
+        .single();
+
+      if (batchUpdateError || !updatedBatch) {
+        for (const rollback of appliedBatchUpdates) {
+          await supabase
+            .from("stock_batches")
+            .update({ remaining_quantity: rollback.previousRemaining })
+            .eq("id", rollback.batchId);
+        }
+        setStockActionLoading(null);
+        return showError("Batch bahan baku berubah saat diproses. Silakan coba lagi.");
+      }
+
+      appliedBatchUpdates.push({
+        batchId: allocation.batchId,
+        previousRemaining: allocation.previousRemaining,
+      });
+    }
+
+    const ingredientMovements = allocations.map((allocation) => ({
       product_id: id,
+      batch_id: allocation.batchId,
       movement_type: "out",
-      quantity: qty,
-      note: "Penyesuaian stok manual dari halaman detail bahan baku",
-    });
+      quantity: allocation.quantity,
+      note: `Penyesuaian stok manual FEFO batch ${allocation.batchCode}`,
+    }));
+
+    const { error } = await supabase.from("stock_movements").insert(ingredientMovements);
 
     if (error) {
+      for (const rollback of appliedBatchUpdates) {
+        await supabase
+          .from("stock_batches")
+          .update({ remaining_quantity: rollback.previousRemaining })
+          .eq("id", rollback.batchId);
+      }
       setStockActionLoading(null);
       return showError(error.message);
     }
 
     setStockActionLoading(null);
 
-    await logActivity("stock_out", `Mengurangi stok bahan baku ${name} sebanyak ${qty}`);
+    await logActivity("stock_out", `Mengurangi stok bahan baku ${name} sebanyak ${qty} (FEFO)`);
     showSuccess("Stok bahan baku berhasil dikurangi");
     loadMovements();
     loadBatches();
@@ -380,11 +478,11 @@ const IngredientDetail = () => {
           <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
             <div className="rounded-xl bg-slate-50 px-3 py-2">
               <p className="text-xs uppercase tracking-wide text-slate-500">Pembelian Terakhir</p>
-              <p className="font-semibold text-slate-900">{lastPurchaseDate ? formatDateId(lastPurchaseDate) : "Belum diisi"}</p>
+              <p className="font-semibold text-slate-900">{formatDateId(latestBatchPurchaseDate || lastPurchaseDate)}</p>
             </div>
             <div className="rounded-xl bg-slate-50 px-3 py-2">
               <p className="text-xs uppercase tracking-wide text-slate-500">Tanggal Expired</p>
-              <p className="font-semibold text-slate-900">{expiryDate ? formatDateId(expiryDate) : "Belum diisi"}</p>
+              <p className="font-semibold text-slate-900">{formatDateId(nearestBatchExpiryDate || expiryDate)}</p>
             </div>
             <div className="rounded-xl bg-slate-50 px-3 py-2">
               <p className="text-xs uppercase tracking-wide text-slate-500">Minimum Stok</p>
@@ -455,24 +553,14 @@ const IngredientDetail = () => {
                 <Input className="mt-1 h-12 rounded-2xl text-base" type="number" min={0} value={minStock} onChange={(e) => setMinStock(e.target.value)} />
               </div>
 
-              <div className="rounded-2xl bg-slate-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tracking umur bahan</p>
-                <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <Label className="text-sm font-semibold text-slate-700">Tanggal pembelian terakhir</Label>
-                    <Input className="mt-1 h-12 rounded-2xl bg-white text-base" type="date" value={lastPurchaseDate} onChange={(e) => setLastPurchaseDate(e.target.value)} />
-                  </div>
-
-                  <div>
-                    <Label className="text-sm font-semibold text-slate-700">Tanggal expired</Label>
-                    <Input className="mt-1 h-12 rounded-2xl bg-white text-base" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
-                  </div>
-                </div>
-              </div>
-
               <Button className="h-12 rounded-2xl bg-emerald-500 text-base hover:bg-emerald-600" onClick={saveChanges} disabled={isSaving}>
                 <Save className="mr-2 h-4 w-4" />
                 {isSaving ? "Menyimpan..." : "Simpan Perubahan"}
+              </Button>
+
+              <Button variant="destructive" className="h-11 rounded-2xl" onClick={deactivateIngredient}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Hapus Bahan Baku
               </Button>
             </div>
           </section>
@@ -547,10 +635,6 @@ const IngredientDetail = () => {
               </div>
             </div>
 
-            <Button variant="destructive" className="mt-4 h-11 rounded-2xl" onClick={deactivateIngredient}>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Hapus Bahan Baku
-            </Button>
           </section>
 
           <section className="rounded-3xl border bg-white p-4 shadow-sm sm:p-6">
