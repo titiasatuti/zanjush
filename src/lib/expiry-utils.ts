@@ -26,6 +26,8 @@ const NON_PERISHABLE_KEYWORDS = [
   "packaging",
 ];
 
+const NON_PERISHABLE_FALLBACK_DAYS = 3650;
+
 const toStartOfDay = (date: Date) => {
   const normalized = new Date(date);
   normalized.setHours(0, 0, 0, 0);
@@ -64,6 +66,25 @@ export const estimateExpiryFromPurchase = (params: {
   const result = new Date(purchase);
   result.setDate(result.getDate() + inferShelfLifeDays(params.ingredientName));
   return result.toISOString().slice(0, 10);
+};
+
+export const resolveBatchExpiryDateForWrite = (params: {
+  ingredientName: string;
+  purchaseDate: string | null;
+  manualExpiryDate: string | null;
+}) => {
+  if (params.manualExpiryDate) return params.manualExpiryDate;
+
+  const estimated = estimateExpiryFromPurchase({
+    ingredientName: params.ingredientName,
+    purchaseDate: params.purchaseDate,
+  });
+  if (estimated) return estimated;
+
+  const baseDate = parseDateOnly(params.purchaseDate) || toStartOfDay(new Date());
+  const fallback = new Date(baseDate);
+  fallback.setDate(fallback.getDate() + NON_PERISHABLE_FALLBACK_DAYS);
+  return fallback.toISOString().slice(0, 10);
 };
 
 export const resolveEffectiveExpiryDate = (params: {

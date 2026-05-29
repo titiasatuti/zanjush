@@ -18,6 +18,7 @@ import {
   getFreshnessPriorityMeta,
   inferExpirySource,
   isLikelyNonPerishableIngredient,
+  resolveBatchExpiryDateForWrite,
   resolveEffectiveExpiryDate,
 } from "@/lib/expiry-utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -323,10 +324,11 @@ const IngredientDetail = () => {
       return showError("Tanggal expired manual wajib diisi jika opsi manual aktif");
     }
 
-    const resolvedExpiryDate = stockInUseManualExpiryDate ? stockInExpiryDate : estimatedStockInExpiry;
-    if (!resolvedExpiryDate && !isLikelyNonPerishable) {
-      return showError("Tanggal expired batch tidak bisa dihitung. Isi tanggal expired manual.");
-    }
+    const resolvedExpiryDate = resolveBatchExpiryDateForWrite({
+      ingredientName: name || ingredient?.name || "bahan baku",
+      purchaseDate: stockInPurchaseDate,
+      manualExpiryDate: stockInUseManualExpiryDate ? stockInExpiryDate : null,
+    });
     if (stockInUseManualExpiryDate && stockInExpiryDate < stockInPurchaseDate) {
       return showError("Tanggal expired batch tidak boleh lebih awal dari tanggal pembelian");
     }
@@ -339,7 +341,7 @@ const IngredientDetail = () => {
         product_id: id,
         batch_code: `ING-${Date.now()}`,
         production_date: stockInPurchaseDate,
-        expiry_date: resolvedExpiryDate || null,
+        expiry_date: resolvedExpiryDate,
         initial_quantity: qty,
         remaining_quantity: qty,
         note: "Batch pembelian bahan baku",

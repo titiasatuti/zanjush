@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { ArrowDownCircle, ArrowUpCircle, Search } from "lucide-react";
 import { Link } from "react-router-dom";
+import { parseWasteReasonFromNote } from "@/lib/waste-reasons";
 
 type StockMovement = {
   id: string;
@@ -189,6 +190,7 @@ const Stock = () => {
               const item = itemMap.get(row.product_id);
               const isIncoming = incomingTypes.includes(row.movement_type);
               const Icon = isIncoming ? ArrowUpCircle : ArrowDownCircle;
+              const parsedReason = parseWasteReasonFromNote(row.note);
 
               return (
                 <div key={row.id} className="rounded-3xl border bg-white p-4 shadow-sm">
@@ -216,9 +218,15 @@ const Stock = () => {
                         <span className="rounded-full bg-slate-100 px-3 py-1">{new Date(row.created_at).toLocaleString()}</span>
                         <span className="rounded-full bg-slate-100 px-3 py-1">Movement ID: {row.id.slice(0, 8)}</span>
                         {row.batch_id && <span className="rounded-full bg-violet-100 px-3 py-1 text-violet-700">Batch: {row.batch_id.slice(0, 8)}</span>}
+                        {parsedReason.reasonLabel && (
+                          <span className="rounded-full bg-rose-100 px-3 py-1 text-rose-700">Alasan: {parsedReason.reasonLabel}</span>
+                        )}
                       </div>
 
                       {row.note && <p className="mt-3 text-sm text-slate-600">{formatMovementNote(row.note)}</p>}
+                      {parsedReason.detail && (
+                        <p className="mt-1 text-xs text-slate-500">Catatan operator: {parsedReason.detail}</p>
+                      )}
                     </div>
                   </div>
                 </div>

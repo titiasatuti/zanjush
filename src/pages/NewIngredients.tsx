@@ -12,6 +12,7 @@ import {
   estimateExpiryFromPurchase,
   inferShelfLifeDays,
   isLikelyNonPerishableIngredient,
+  resolveBatchExpiryDateForWrite,
 } from "@/lib/expiry-utils";
 
 const units = [
@@ -157,17 +158,11 @@ const NewIngredients = () => {
 
     if (stockNumber > 0) {
       const purchaseDate = lastPurchaseDate || new Date().toISOString().slice(0, 10);
-      const resolvedExpiryDate =
-        (useManualExpiryDate ? expiryDate : null) ||
-        estimateExpiryFromPurchase({
-          ingredientName: name,
-          purchaseDate,
-        });
-
-      if (!resolvedExpiryDate && !isLikelyNonPerishable) {
-        setIsSaving(false);
-        return showError("Tanggal expired batch tidak bisa dihitung. Isi tanggal pembelian atau aktifkan expired manual.");
-      }
+      const resolvedExpiryDate = resolveBatchExpiryDateForWrite({
+        ingredientName: name,
+        purchaseDate,
+        manualExpiryDate: useManualExpiryDate ? expiryDate : null,
+      });
 
       const { data: insertedBatch, error: batchError } = await supabase
         .from("stock_batches")
@@ -175,7 +170,7 @@ const NewIngredients = () => {
           product_id: insertedItem.id,
           batch_code: `ING-${Date.now()}`,
           production_date: purchaseDate,
-          expiry_date: resolvedExpiryDate || null,
+          expiry_date: resolvedExpiryDate,
           initial_quantity: stockNumber,
           remaining_quantity: stockNumber,
           note: notes.trim() || null,

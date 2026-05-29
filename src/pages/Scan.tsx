@@ -16,6 +16,10 @@ import {
   inferExpirySource,
   resolveEffectiveExpiryDate,
 } from "@/lib/expiry-utils";
+import {
+  buildWasteMovementNote,
+  WASTE_REASON_OPTIONS,
+} from "@/lib/waste-reasons";
 
 type ResolvedItem = {
   id: string;
@@ -37,6 +41,8 @@ const Scan = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+  const [stockOutReason, setStockOutReason] = useState<(typeof WASTE_REASON_OPTIONS)[number]["value"] | "">("");
+  const [stockOutNote, setStockOutNote] = useState("");
 
   const safeQty = useMemo(() => (qty > 0 ? qty : 1), [qty]);
 
@@ -127,6 +133,8 @@ const Scan = () => {
     setPayload("");
     setResolved(null);
     setQty(1);
+    setStockOutReason("");
+    setStockOutNote("");
     window.setTimeout(() => manualInputRef.current?.focus(), 100);
   };
 
@@ -141,6 +149,16 @@ const Scan = () => {
     }
 
     if (type === "out") {
+      if (!stockOutReason) {
+        setIsPosting(false);
+        return showError("Pilih alasan pengurangan stok terlebih dahulu");
+      }
+
+      if (stockOutReason === "other" && stockOutNote.trim().length < 3) {
+        setIsPosting(false);
+        return showError("Isi catatan alasan minimal 3 karakter untuk opsi Lainnya");
+      }
+
       const stockCheck = await canReduceStock(resolved.id, safeQty);
       if (!stockCheck.allowed) {
         await logActivity(
@@ -186,12 +204,22 @@ const Scan = () => {
       return showError("Batch berubah saat diproses. Silakan ulang scan.");
     }
 
+    const selectedReason = WASTE_REASON_OPTIONS.find((reason) => reason.value === stockOutReason);
+    const movementNote =
+      type === "out"
+        ? buildWasteMovementNote({
+            baseNote: `Operasi scan ${resolved.kind}`,
+            reasonCode: selectedReason?.value,
+            detailNote: stockOutNote.trim(),
+          })
+        : `Operasi scan ${resolved.kind}`;
+
     const { error } = await supabase.from("stock_movements").insert({
       product_id: resolved.id,
       batch_id: resolved.batchId,
       movement_type: type,
       quantity: safeQty,
-      note: `Operasi scan ${resolved.kind}`,
+      note: movementNote,
     });
 
     if (error) {
@@ -207,9 +235,15 @@ const Scan = () => {
     setResolved({ ...resolved, stock: newStock });
     await logActivity(
       type === "in" ? "scan_stock_in" : "scan_stock_out",
-      `Scan ${type === "in" ? "tambah" : "kurangi"} stok ${resolved.name} sebanyak ${safeQty} pada batch`,
+      type === "in"
+        ? `Scan tambah stok ${resolved.name} sebanyak ${safeQty} pada batch`
+        : `Scan kurangi stok ${resolved.name} sebanyak ${safeQty} pada batch (${selectedReason?.label || "tanpa alasan"})`,
     );
     showSuccess(type === "in" ? "Stok berhasil ditambah" : "Stok berhasil dikurangi");
+    if (type === "out") {
+      setStockOutReason("");
+      setStockOutNote("");
+    }
     setIsPosting(false);
   };
 
@@ -340,22 +374,50 @@ const Scan = () => {
               </div>
 
               {resolved.kind === "ingredient" ? (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Button
-                    onClick={() => postMovement("in")}
-                    disabled={isPosting}
-                    className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600"
-                  >
-                    Tambah Stok Batch
-                  </Button>
-                  <Button
-                    onClick={() => postMovement("out")}
-                    disabled={isPosting}
-                    variant="secondary"
-                    className="h-12 rounded-xl"
-                  >
-                    Kurangi Stok Batch
-                  </Button>
+                <div className="space-y-2">
+                  <div className="rounded-xl border bg-slate-50 p-3">
+                    <p className="text-sm font-semibold text-slate-700">Alasan Kurangi Stok</p>
+                    <p className="mt-1 text-xs text-slate-500">Wajib diisi saat menekan tombol Kurangi Stok Batch.</p>
+                    <select
+                      value={stockOutReason}
+                      onChange={(event) => setStockOutReason(event.target.value as (typeof WASTE_REASON_OPTIONS)[number]["value"] | "")}
+                      className="mt-2 h-11 w-full rounded-xl border bg-white px-3 text-sm"
+                    >
+                      <option value="">Pilih alasan</option>
+                      {WASTE_REASON_OPTIONS.map((reason) => (
+                        <option key={reason.value} value={reason.value}>
+                          {reason.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    {stockOutReason === "other" && (
+                      <Input
+                        className="mt-2 rounded-xl"
+                        value={stockOutNote}
+                        onChange={(event) => setStockOutNote(event.target.value)}
+                        placeholder="Tulis alasan detail"
+                      />
+                    )}
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Button
+                      onClick={() => postMovement("in")}
+                      disabled={isPosting}
+                      className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600"
+                    >
+                      Tambah Stok Batch
+                    </Button>
+                    <Button
+                      onClick={() => postMovement("out")}
+                      disabled={isPosting}
+                      variant="secondary"
+                      className="h-12 rounded-xl"
+                    >
+                      Kurangi Stok Batch
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">

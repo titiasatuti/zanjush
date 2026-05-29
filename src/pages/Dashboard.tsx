@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, Beaker, Box, Clock3, ShieldAlert, ShoppingCart } from "lucide-react";
+import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, Beaker, Box, Clock3, ShieldAlert, ShoppingCart, Trash2 } from "lucide-react";
 import {
   formatDateId,
   getExpirySourceLabel,
@@ -19,6 +19,12 @@ import {
   type ProductRecipeRow,
   type SimpleMovementRow,
 } from "@/lib/stock-utils";
+import {
+  getWasteReasonLabel,
+  parseWasteReasonFromNote,
+  sortWasteReasonsByStandardOrder,
+  type WasteReasonCode,
+} from "@/lib/waste-reasons";
 
 type InventoryItem = {
   id: string;
@@ -34,6 +40,7 @@ type Movement = {
   product_id: string;
   movement_type: string;
   quantity: number;
+  note?: string | null;
   created_at?: string;
 };
 
@@ -69,7 +76,7 @@ const Dashboard = () => {
           .from("items")
           .select("id,name,type,min_stock,last_purchase_date,expiry_date")
           .eq("is_active", true),
-        supabase.from("stock_movements").select("id,product_id,movement_type,quantity,created_at"),
+        supabase.from("stock_movements").select("id,product_id,movement_type,quantity,note,created_at"),
         supabase.from("stock_batches").select("product_id,expiry_date,production_date,remaining_quantity"),
         supabase.from("product_ingredients").select("product_id,ingredient_id,qty_per_unit"),
       ]);
@@ -152,6 +159,41 @@ const Dashboard = () => {
     });
 
     return { productIn, productOut, ingredientIn, ingredientOut };
+  }, [todayMovements, itemMap]);
+
+  const todayWasteSummary = useMemo(() => {
+    const reasonMap = new Map<WasteReasonCode, number>();
+    let totalWasteQty = 0;
+
+    todayMovements.forEach((movement) => {
+      const item = itemMap.get(movement.product_id);
+      if (!item || item.type !== "ingredient") return;
+      if (incomingTypes.includes(movement.movement_type)) return;
+
+      const parsed = parseWasteReasonFromNote(movement.note || null);
+      if (!parsed.reasonCode) return;
+
+      totalWasteQty += movement.quantity;
+      reasonMap.set(parsed.reasonCode, (reasonMap.get(parsed.reasonCode) || 0) + movement.quantity);
+    });
+
+    const reasonsByOrder = sortWasteReasonsByStandardOrder(
+      Array.from(reasonMap.entries()).map(([reasonCode, quantity]) => ({
+        reasonCode,
+        quantity,
+      })),
+    )
+      .map((row) => ({
+        reasonCode: row.reasonCode,
+        reason: getWasteReasonLabel(row.reasonCode),
+        quantity: row.quantity,
+      }))
+      .slice(0, 3);
+
+    return {
+      totalWasteQty,
+      reasonsByOrder,
+    };
   }, [todayMovements, itemMap]);
 
   const topSellingProducts = useMemo(() => {
@@ -306,7 +348,7 @@ const Dashboard = () => {
         <div className="rounded-3xl border border-rose-100 bg-rose-50 p-5 text-sm font-medium text-rose-700 shadow-sm">{errorText}</div>
       ) : (
         <>
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Card className="rounded-2xl border-rose-100 bg-rose-50/60">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-sm text-rose-700">
@@ -343,6 +385,28 @@ const Dashboard = () => {
               <CardContent className="flex items-end justify-between">
                 <span className="text-3xl font-bold text-violet-700">{expiringSoonTotal}</span>
                 <span className="text-xs text-violet-700">bahan baku</span>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl border-orange-100 bg-orange-50/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm text-orange-700">
+                  <Trash2 className="h-4 w-4" />
+                  Waste Hari Ini
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                <div className="flex items-end justify-between">
+                  <span className="text-3xl font-bold text-orange-700">{todayWasteSummary.totalWasteQty}</span>
+                  <span className="text-xs text-orange-700">qty</span>
+                </div>
+                {todayWasteSummary.reasonsByOrder.length ? (
+                  <p className="text-xs text-orange-700">
+                    Rincian: {todayWasteSummary.reasonsByOrder.map((row) => `${row.reason} (${row.quantity})`).join(", ")}
+                  </p>
+                ) : (
+                  <p className="text-xs text-orange-700">Belum ada waste tercatat hari ini</p>
+                )}
               </CardContent>
             </Card>
           </div>
