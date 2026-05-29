@@ -8,6 +8,11 @@ import { showError, showSuccess } from "@/utils/toast";
 import { useNavigate } from "react-router-dom";
 import { ImagePlus, PackagePlus, Save } from "lucide-react";
 import { logActivity } from "@/lib/activity-log";
+import {
+  estimateExpiryFromPurchase,
+  inferShelfLifeDays,
+  isLikelyNonPerishableIngredient,
+} from "@/lib/expiry-utils";
 
 const units = [
   "Batang",
@@ -47,11 +52,18 @@ const NewIngredients = () => {
   const [minStock, setMinStock] = useState("10");
   const [lastPurchaseDate, setLastPurchaseDate] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
+  const [useManualExpiryDate, setUseManualExpiryDate] = useState(false);
   const [totalBuyPrice, setTotalBuyPrice] = useState("");
   const [notes, setNotes] = useState("");
   const [itemCode, setItemCode] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const estimatedExpiry = estimateExpiryFromPurchase({
+    ingredientName: name,
+    purchaseDate: lastPurchaseDate || null,
+  });
+  const isLikelyNonPerishable = isLikelyNonPerishableIngredient(name || "");
 
   useEffect(() => {
     supabase
@@ -100,7 +112,11 @@ const NewIngredients = () => {
     const minStockNumber = Number(minStock || 0);
     if (Number.isNaN(minStockNumber) || minStockNumber < 0) return showError("Minimum stok tidak valid");
 
-    if (lastPurchaseDate && expiryDate && expiryDate < lastPurchaseDate) {
+    if (useManualExpiryDate && !expiryDate) {
+      return showError("Tanggal expired manual wajib diisi jika opsi manual aktif");
+    }
+
+    if (useManualExpiryDate && lastPurchaseDate && expiryDate && expiryDate < lastPurchaseDate) {
       return showError("Tanggal expired tidak boleh lebih awal dari tanggal pembelian");
     }
 
@@ -127,7 +143,7 @@ const NewIngredients = () => {
         unit: unit.toLowerCase(),
         min_stock: minStockNumber,
         last_purchase_date: lastPurchaseDate || null,
-        expiry_date: expiryDate || null,
+        expiry_date: useManualExpiryDate ? expiryDate || null : null,
         photo_url: uploadedPhotoUrl,
         is_active: true,
       })
@@ -141,7 +157,17 @@ const NewIngredients = () => {
 
     if (stockNumber > 0) {
       const purchaseDate = lastPurchaseDate || new Date().toISOString().slice(0, 10);
-      const resolvedExpiryDate = expiryDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const resolvedExpiryDate =
+        (useManualExpiryDate ? expiryDate : null) ||
+        estimateExpiryFromPurchase({
+          ingredientName: name,
+          purchaseDate,
+        });
+
+      if (!resolvedExpiryDate && !isLikelyNonPerishable) {
+        setIsSaving(false);
+        return showError("Tanggal expired batch tidak bisa dihitung. Isi tanggal pembelian atau aktifkan expired manual.");
+      }
 
       const { data: insertedBatch, error: batchError } = await supabase
         .from("stock_batches")
@@ -149,7 +175,7 @@ const NewIngredients = () => {
           product_id: insertedItem.id,
           batch_code: `ING-${Date.now()}`,
           production_date: purchaseDate,
-          expiry_date: resolvedExpiryDate,
+          expiry_date: resolvedExpiryDate || null,
           initial_quantity: stockNumber,
           remaining_quantity: stockNumber,
           note: notes.trim() || null,
@@ -269,11 +295,38 @@ const NewIngredients = () => {
                     <Input className="mt-1 h-12 rounded-2xl bg-white text-base" type="date" value={lastPurchaseDate} onChange={(e) => setLastPurchaseDate(e.target.value)} />
                   </div>
 
-                  <div>
-                    <Label className="text-sm font-semibold text-slate-700">Tanggal expired</Label>
-                    <Input className="mt-1 h-12 rounded-2xl bg-white text-base" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+                  <div className="flex items-center gap-2 rounded-xl border bg-white px-3 py-2 sm:col-span-2">
+                    <input
+                      id="manual-expiry-toggle"
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={useManualExpiryDate}
+                      onChange={(e) => {
+                        setUseManualExpiryDate(e.target.checked);
+                        if (!e.target.checked) setExpiryDate("");
+                      }}
+                    />
+                    <Label htmlFor="manual-expiry-toggle" className="text-sm font-semibold text-slate-700">
+                      Isi tanggal expired manual
+                    </Label>
                   </div>
+
+                  {useManualExpiryDate && (
+                    <div>
+                      <Label className="text-sm font-semibold text-slate-700">Tanggal expired</Label>
+                      <Input className="mt-1 h-12 rounded-2xl bg-white text-base" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+                    </div>
+                  )}
                 </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  Jika tanggal expired tidak diisi, sistem akan pakai estimasi dari tanggal pembelian.
+                  {isLikelyNonPerishable
+                    ? " Item ini terdeteksi sebagai non-perishable, jadi expired boleh dikosongkan."
+                    : ""}
+                  {lastPurchaseDate
+                    ? ` Estimasi saat ini: ${estimatedExpiry || "-"} (umur simpan default ${inferShelfLifeDays(name || "bahan baku")} hari).`
+                    : " Isi tanggal pembelian untuk melihat estimasi."}
+                </p>
               </div>
 
               <div className="sm:col-span-2">

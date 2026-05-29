@@ -8,7 +8,14 @@ import { QrCameraScanner } from "@/components/qr-camera-scanner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { canReduceStock, readItemStock } from "@/lib/stock-utils";
 import { logActivity } from "@/lib/activity-log";
-import { formatDateId, getExpiryBadgeClass, getExpiryMeta } from "@/lib/expiry-utils";
+import {
+  formatDateId,
+  getExpirySourceLabel,
+  getExpiryBadgeClass,
+  getExpiryMeta,
+  inferExpirySource,
+  resolveEffectiveExpiryDate,
+} from "@/lib/expiry-utils";
 
 type ResolvedItem = {
   id: string;
@@ -250,6 +257,29 @@ const Scan = () => {
 
           {resolved && (
             <div className="space-y-3">
+              {(() => {
+                const effectiveExpiryDate =
+                  resolved.kind === "ingredient"
+                    ? resolveEffectiveExpiryDate({
+                        ingredientName: resolved.name,
+                        manualExpiryDate: resolved.expiryDate,
+                        purchaseDate: resolved.productionDate,
+                      })
+                    : resolved.expiryDate;
+
+                const expirySourceLabel =
+                  resolved.kind === "ingredient"
+                    ? getExpirySourceLabel(
+                        inferExpirySource({
+                          ingredientName: resolved.name,
+                          purchaseDate: resolved.productionDate,
+                          expiryDate: effectiveExpiryDate,
+                        }),
+                      )
+                    : "Manual";
+
+                return (
+                  <>
               <div className="rounded-xl bg-slate-50 p-3">
                 <p className="text-sm text-slate-500">Nama</p>
                 <p className="font-semibold text-slate-900">{resolved.name}</p>
@@ -277,10 +307,11 @@ const Scan = () => {
                   <p className="text-sm text-slate-500">{resolved.kind === "product" ? "Tanggal pembuatan" : "Tanggal pembelian"}</p>
                   <p className="font-semibold text-slate-900">{formatDateId(resolved.productionDate)}</p>
                 </div>
-                <div className={`rounded-xl p-3 ${getExpiryBadgeClass(getExpiryMeta(resolved.expiryDate).status)}`}>
+                <div className={`rounded-xl p-3 ${getExpiryBadgeClass(getExpiryMeta(effectiveExpiryDate).status)}`}>
                   <p className="text-sm text-slate-500">Tanggal expired</p>
-                  <p className="font-semibold">{formatDateId(resolved.expiryDate)}</p>
-                  <p className="mt-1 text-xs">{getExpiryMeta(resolved.expiryDate).label}</p>
+                  <p className="font-semibold">{formatDateId(effectiveExpiryDate)}</p>
+                  <p className="mt-1 text-xs">Sumber: {expirySourceLabel}</p>
+                  <p className="mt-1 text-xs">{getExpiryMeta(effectiveExpiryDate).label}</p>
                 </div>
               </div>
 
@@ -335,6 +366,9 @@ const Scan = () => {
               <Button type="button" variant="ghost" onClick={closeResult} className="w-full rounded-xl">
                 Selesai & Scan Lagi
               </Button>
+                  </>
+                );
+              })()}
             </div>
           )}
         </DialogContent>

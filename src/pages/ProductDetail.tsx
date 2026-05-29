@@ -16,6 +16,7 @@ import {
 import { logActivity } from "@/lib/activity-log";
 import { DetailPhotoUploadButton } from "@/components/detail-photo-upload-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { resolveEffectiveExpiryDate } from "@/lib/expiry-utils";
 
 type Product = {
   id: string;
@@ -344,8 +345,19 @@ const ProductDetail = () => {
 
     const checks = requirements.map((requirement) => {
       const ingredientBatches = (batchesByIngredient.get(requirement.ingredientId) || []).slice().sort((a, b) => {
-        const aExpiry = a.expiry_date ? new Date(a.expiry_date).getTime() : Number.MAX_SAFE_INTEGER;
-        const bExpiry = b.expiry_date ? new Date(b.expiry_date).getTime() : Number.MAX_SAFE_INTEGER;
+        const aEffectiveExpiry = resolveEffectiveExpiryDate({
+          ingredientName: requirement.ingredientName,
+          manualExpiryDate: a.expiry_date,
+          purchaseDate: a.production_date,
+        });
+        const bEffectiveExpiry = resolveEffectiveExpiryDate({
+          ingredientName: requirement.ingredientName,
+          manualExpiryDate: b.expiry_date,
+          purchaseDate: b.production_date,
+        });
+
+        const aExpiry = aEffectiveExpiry ? new Date(aEffectiveExpiry).getTime() : Number.MAX_SAFE_INTEGER;
+        const bExpiry = bEffectiveExpiry ? new Date(bEffectiveExpiry).getTime() : Number.MAX_SAFE_INTEGER;
         if (aExpiry !== bExpiry) return aExpiry - bExpiry;
 
         const aProd = a.production_date ? new Date(a.production_date).getTime() : Number.MAX_SAFE_INTEGER;

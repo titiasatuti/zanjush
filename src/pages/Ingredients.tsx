@@ -3,7 +3,14 @@ import { AppLayout } from "@/components/app-layout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { getExpiryBadgeClass, getExpiryMeta, formatDateId } from "@/lib/expiry-utils";
+import {
+  formatDateId,
+  getExpirySourceLabel,
+  getFreshnessPriorityClass,
+  getFreshnessPriorityMeta,
+  inferExpirySource,
+  resolveEffectiveExpiryDate,
+} from "@/lib/expiry-utils";
 
 type Ingredient = {
   id: string;
@@ -25,6 +32,7 @@ type Movement = {
 type BatchSummary = {
   product_id: string;
   expiry_date: string | null;
+  production_date: string | null;
   remaining_quantity: number;
 };
 
@@ -54,7 +62,7 @@ const Ingredients = () => {
           .eq("is_active", true)
           .order("created_at", { ascending: false }),
         supabase.from("stock_movements").select("product_id,movement_type,quantity,note"),
-        supabase.from("stock_batches").select("product_id,expiry_date,remaining_quantity"),
+        supabase.from("stock_batches").select("product_id,expiry_date,production_date,remaining_quantity"),
       ]);
 
       if (itemsRes.error || movementsRes.error || batchesRes.error) {
@@ -83,15 +91,22 @@ const Ingredients = () => {
   }, [movements]);
 
   const filteredIngredients = useMemo(() => {
+    const ingredientById = new Map(ingredients.map((item) => [item.id, item]));
     const nearestExpiryMap = new Map<string, string | null>();
 
     batches
       .filter((batch) => batch.remaining_quantity > 0)
       .forEach((batch) => {
-        if (!batch.expiry_date) return;
+        const ingredient = ingredientById.get(batch.product_id);
+        const effectiveExpiry = resolveEffectiveExpiryDate({
+          ingredientName: ingredient?.name || "bahan baku",
+          manualExpiryDate: batch.expiry_date,
+          purchaseDate: batch.production_date,
+        });
+        if (!effectiveExpiry) return;
         const current = nearestExpiryMap.get(batch.product_id);
-        if (!current || new Date(batch.expiry_date) < new Date(current)) {
-          nearestExpiryMap.set(batch.product_id, batch.expiry_date);
+        if (!current || new Date(effectiveExpiry) < new Date(current)) {
+          nearestExpiryMap.set(batch.product_id, effectiveExpiry);
         }
       });
 
@@ -99,11 +114,11 @@ const Ingredients = () => {
 
     return ingredients.filter((item) => {
       const batchExpiryDate = nearestExpiryMap.get(item.id) || item.expiry_date;
-      const meta = getExpiryMeta(batchExpiryDate);
+      const meta = getFreshnessPriorityMeta(batchExpiryDate);
       if (expiryFilter === "expired") {
-        return meta.status === "expired" || meta.status === "today";
+        return meta.priority === "expired" || meta.priority === "critical";
       }
-      return meta.status === "near";
+      return meta.priority === "priority";
     });
   }, [ingredients, expiryFilter, batches]);
 
@@ -128,21 +143,29 @@ const Ingredients = () => {
   }, [batches]);
 
   const nearestExpiryByItem = useMemo(() => {
+    const ingredientById = new Map(ingredients.map((item) => [item.id, item]));
     const map = new Map<string, string | null>();
 
     batches
       .filter((batch) => batch.remaining_quantity > 0)
       .forEach((batch) => {
-        if (!batch.expiry_date) return;
+        const ingredient = ingredientById.get(batch.product_id);
+        const effectiveExpiry = resolveEffectiveExpiryDate({
+          ingredientName: ingredient?.name || "bahan baku",
+          manualExpiryDate: batch.expiry_date,
+          purchaseDate: batch.production_date,
+        });
+
+        if (!effectiveExpiry) return;
 
         const current = map.get(batch.product_id);
-        if (!current || new Date(batch.expiry_date) < new Date(current)) {
-          map.set(batch.product_id, batch.expiry_date);
+        if (!current || new Date(effectiveExpiry) < new Date(current)) {
+          map.set(batch.product_id, effectiveExpiry);
         }
       });
 
     return map;
-  }, [batches]);
+  }, [batches, ingredients]);
 
   return (
     <AppLayout title="Atur Bahan Baku" backTo="/products">
@@ -152,15 +175,15 @@ const Ingredients = () => {
         </Button>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter Expired</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter Prioritas</span>
           <select
             className="h-10 rounded-xl border px-3 text-sm"
             value={expiryFilter}
             onChange={(event) => setExpiryFilter(event.target.value as "all" | "near" | "expired")}
           >
             <option value="all">Semua</option>
-            <option value="near">Hampir expired (maks. 3 hari)</option>
-            <option value="expired">Sudah expired</option>
+            <option value="near">Prioritas pakai (1-3 hari)</option>
+            <option value="expired">Kritis / lewat estimasi</option>
           </select>
         </div>
       </div>
@@ -181,7 +204,12 @@ const Ingredients = () => {
               <div className="space-y-3">
                 {items.map((item) => {
                   const batchExpiryDate = nearestExpiryByItem.get(item.id) || item.expiry_date;
-                  const expiry = getExpiryMeta(batchExpiryDate);
+                  const expiry = getFreshnessPriorityMeta(batchExpiryDate);
+                  const expirySource = inferExpirySource({
+                    ingredientName: item.name,
+                    purchaseDate: item.last_purchase_date,
+                    expiryDate: batchExpiryDate,
+                  });
                   const stock = stockByItem.get(item.id) || 0;
                   const batchCount = batchCountByItem.get(item.id) || 0;
 
@@ -204,7 +232,7 @@ const Ingredients = () => {
                               <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">{item.name}</p>
                               <p className="mt-0.5 text-sm text-slate-500">Beli terakhir: {formatDateId(item.last_purchase_date)}</p>
                             </div>
-                            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${getExpiryBadgeClass(expiry.status)}`}>
+                            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${getFreshnessPriorityClass(expiry.priority)}`}>
                               {expiry.label}
                             </span>
                           </div>
@@ -221,6 +249,9 @@ const Ingredients = () => {
                             <div className="rounded-xl bg-slate-50 px-3 py-2">
                               <p className="text-[11px] uppercase tracking-wide text-slate-500">Expired</p>
                               <p className="truncate text-sm font-semibold text-slate-900">{formatDateId(batchExpiryDate)}</p>
+                              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500">
+                                Sumber: {getExpirySourceLabel(expirySource)}
+                              </p>
                             </div>
                           </div>
 

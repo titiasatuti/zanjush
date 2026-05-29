@@ -5,7 +5,14 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, Beaker, Box, Clock3, ShieldAlert, ShoppingCart } from "lucide-react";
-import { formatDateId, getExpiryBadgeClass, getExpiryMeta } from "@/lib/expiry-utils";
+import {
+  formatDateId,
+  getExpirySourceLabel,
+  getFreshnessPriorityClass,
+  getFreshnessPriorityMeta,
+  inferExpirySource,
+  resolveEffectiveExpiryDate,
+} from "@/lib/expiry-utils";
 import {
   buildStockMapFromMovements,
   calculateProductStockFromRecipe,
@@ -35,6 +42,7 @@ type RecipeRow = ProductRecipeRow;
 type BatchSummary = {
   product_id: string;
   expiry_date: string | null;
+  production_date: string | null;
   remaining_quantity: number;
 };
 
@@ -62,7 +70,7 @@ const Dashboard = () => {
           .select("id,name,type,min_stock,last_purchase_date,expiry_date")
           .eq("is_active", true),
         supabase.from("stock_movements").select("id,product_id,movement_type,quantity,created_at"),
-        supabase.from("stock_batches").select("product_id,expiry_date,remaining_quantity"),
+        supabase.from("stock_batches").select("product_id,expiry_date,production_date,remaining_quantity"),
         supabase.from("product_ingredients").select("product_id,ingredient_id,qty_per_unit"),
       ]);
 
@@ -227,15 +235,24 @@ const Dashboard = () => {
   }, [items, stockMap, productDerivedStockMap]);
 
   const expiringIngredients = useMemo(() => {
+    const ingredientById = new Map(
+      items.filter((item) => item.type === "ingredient").map((item) => [item.id, item]),
+    );
     const nearestExpiryByIngredient = new Map<string, string | null>();
 
     batches
       .filter((batch) => batch.remaining_quantity > 0)
       .forEach((batch) => {
-        if (!batch.expiry_date) return;
+        const ingredient = ingredientById.get(batch.product_id);
+        const effectiveExpiry = resolveEffectiveExpiryDate({
+          ingredientName: ingredient?.name || "bahan baku",
+          manualExpiryDate: batch.expiry_date,
+          purchaseDate: batch.production_date,
+        });
+        if (!effectiveExpiry) return;
         const current = nearestExpiryByIngredient.get(batch.product_id);
-        if (!current || new Date(batch.expiry_date) < new Date(current)) {
-          nearestExpiryByIngredient.set(batch.product_id, batch.expiry_date);
+        if (!current || new Date(effectiveExpiry) < new Date(current)) {
+          nearestExpiryByIngredient.set(batch.product_id, effectiveExpiry);
         }
       });
 
@@ -243,14 +260,20 @@ const Dashboard = () => {
       .filter((item) => item.type === "ingredient")
       .map((item) => {
         const nearestBatchExpiry = nearestExpiryByIngredient.get(item.id) || item.expiry_date;
-        const meta = getExpiryMeta(nearestBatchExpiry);
+        const meta = getFreshnessPriorityMeta(nearestBatchExpiry);
+        const expirySource = inferExpirySource({
+          ingredientName: item.name,
+          purchaseDate: item.last_purchase_date,
+          expiryDate: nearestBatchExpiry,
+        });
         return {
           ...item,
           resolved_expiry_date: nearestBatchExpiry,
+          expiry_source: expirySource,
           ...meta,
         };
       })
-      .filter((item) => item.status === "expired" || item.status === "today" || item.status === "near")
+      .filter((item) => item.priority === "expired" || item.priority === "critical" || item.priority === "priority")
       .sort((a, b) => {
         const aDays = a.daysRemaining ?? Number.MAX_SAFE_INTEGER;
         const bDays = b.daysRemaining ?? Number.MAX_SAFE_INTEGER;
@@ -293,7 +316,7 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent className="flex items-end justify-between">
                 <span className="text-3xl font-bold text-rose-700">{criticalAlerts}</span>
-                <span className="text-xs text-rose-600">Bahan Mendekati Expire</span>
+                <span className="text-xs text-rose-600">Bahan Prioritas Pakai</span>
               </CardContent>
             </Card>
 
@@ -314,7 +337,7 @@ const Dashboard = () => {
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-sm text-violet-700">
                   <Clock3 className="h-4 w-4" />
-                  Mendekati Expire
+                  Prioritas Pemakaian
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex items-end justify-between">
@@ -478,7 +501,7 @@ const Dashboard = () => {
 
             <Card className="rounded-2xl border-violet-100 lg:col-span-1">
               <CardHeader>
-                <CardTitle className="text-base">Mendekati Expire</CardTitle>
+                <CardTitle className="text-base">Prioritas Pemakaian Bahan</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
@@ -493,9 +516,11 @@ const Dashboard = () => {
                         >
                           <div className="min-w-0">
                             <p className="truncate font-semibold text-slate-900">{item.name}</p>
-                            <p className="text-xs text-slate-500">Exp: {formatDateId(item.resolved_expiry_date)}</p>
+                            <p className="text-xs text-slate-500">
+                              Exp: {formatDateId(item.resolved_expiry_date)} • {getExpirySourceLabel(item.expiry_source)}
+                            </p>
                           </div>
-                          <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${getExpiryBadgeClass(item.status)}`}>
+                          <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${getFreshnessPriorityClass(item.priority)}`}>
                             {item.label}
                           </span>
                         </Link>

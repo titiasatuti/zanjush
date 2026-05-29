@@ -10,7 +10,16 @@ import { Boxes, PackageCheck, QrCode, Save, Trash2, Printer } from "lucide-react
 import { canReduceStock } from "@/lib/stock-utils";
 import { logActivity } from "@/lib/activity-log";
 import { DetailPhotoUploadButton } from "@/components/detail-photo-upload-button";
-import { formatDateId } from "@/lib/expiry-utils";
+import {
+  estimateExpiryFromPurchase,
+  formatDateId,
+  getExpirySourceLabel,
+  getFreshnessPriorityClass,
+  getFreshnessPriorityMeta,
+  inferExpirySource,
+  isLikelyNonPerishableIngredient,
+  resolveEffectiveExpiryDate,
+} from "@/lib/expiry-utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -33,8 +42,8 @@ type Movement = {
 type BatchRow = {
   id: string;
   batch_code: string;
-  production_date: string;
-  expiry_date: string;
+  production_date: string | null;
+  expiry_date: string | null;
   initial_quantity: number;
   remaining_quantity: number;
   qr_payload: string | null;
@@ -56,6 +65,7 @@ const IngredientDetail = () => {
   const [adjustQty, setAdjustQty] = useState("1");
   const [stockInPurchaseDate, setStockInPurchaseDate] = useState("");
   const [stockInExpiryDate, setStockInExpiryDate] = useState("");
+  const [stockInUseManualExpiryDate, setStockInUseManualExpiryDate] = useState(false);
   const [batches, setBatches] = useState<BatchRow[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [stockActionLoading, setStockActionLoading] = useState<"in" | "out" | null>(null);
@@ -85,11 +95,16 @@ const IngredientDetail = () => {
   const nearestBatchExpiryDate = useMemo(() => {
     if (!activeBatches.length) return null;
     return activeBatches.reduce<string | null>((nearest, batch) => {
-      if (!batch.expiry_date) return nearest;
-      if (!nearest) return batch.expiry_date;
-      return new Date(batch.expiry_date) < new Date(nearest) ? batch.expiry_date : nearest;
+      const effective = resolveEffectiveExpiryDate({
+        ingredientName: name || ingredient?.name || "bahan baku",
+        manualExpiryDate: batch.expiry_date,
+        purchaseDate: batch.production_date,
+      });
+      if (!effective) return nearest;
+      if (!nearest) return effective;
+      return new Date(effective) < new Date(nearest) ? effective : nearest;
     }, null);
-  }, [activeBatches]);
+  }, [activeBatches, name, ingredient?.name]);
 
   const latestBatchPurchaseDate = useMemo(() => {
     if (!activeBatches.length) return null;
@@ -99,6 +114,30 @@ const IngredientDetail = () => {
       return new Date(batch.production_date) > new Date(latest) ? batch.production_date : latest;
     }, null);
   }, [activeBatches]);
+
+  const freshnessMeta = useMemo(() => {
+    return getFreshnessPriorityMeta(nearestBatchExpiryDate || expiryDate || null);
+  }, [nearestBatchExpiryDate, expiryDate]);
+
+  const summaryExpirySourceLabel = useMemo(() => {
+    const source = inferExpirySource({
+      ingredientName: name || ingredient?.name || "bahan baku",
+      purchaseDate: latestBatchPurchaseDate || lastPurchaseDate || null,
+      expiryDate: nearestBatchExpiryDate || expiryDate || null,
+    });
+    return getExpirySourceLabel(source);
+  }, [name, ingredient?.name, latestBatchPurchaseDate, lastPurchaseDate, nearestBatchExpiryDate, expiryDate]);
+
+  const estimatedStockInExpiry = useMemo(() => {
+    return estimateExpiryFromPurchase({
+      ingredientName: name || ingredient?.name || "bahan baku",
+      purchaseDate: stockInPurchaseDate || null,
+    });
+  }, [name, ingredient?.name, stockInPurchaseDate]);
+
+  const isLikelyNonPerishable = useMemo(() => {
+    return isLikelyNonPerishableIngredient(name || ingredient?.name || "");
+  }, [name, ingredient?.name]);
 
   const loadMovements = async () => {
     if (!id) return;
@@ -280,8 +319,15 @@ const IngredientDetail = () => {
     if (!qty || qty < 1) return showError("Jumlah harus lebih dari 0");
 
     if (!stockInPurchaseDate) return showError("Tanggal pembelian batch wajib diisi");
-    if (!stockInExpiryDate) return showError("Tanggal expired batch wajib diisi");
-    if (stockInExpiryDate < stockInPurchaseDate) {
+    if (stockInUseManualExpiryDate && !stockInExpiryDate) {
+      return showError("Tanggal expired manual wajib diisi jika opsi manual aktif");
+    }
+
+    const resolvedExpiryDate = stockInUseManualExpiryDate ? stockInExpiryDate : estimatedStockInExpiry;
+    if (!resolvedExpiryDate && !isLikelyNonPerishable) {
+      return showError("Tanggal expired batch tidak bisa dihitung. Isi tanggal expired manual.");
+    }
+    if (stockInUseManualExpiryDate && stockInExpiryDate < stockInPurchaseDate) {
       return showError("Tanggal expired batch tidak boleh lebih awal dari tanggal pembelian");
     }
 
@@ -293,7 +339,7 @@ const IngredientDetail = () => {
         product_id: id,
         batch_code: `ING-${Date.now()}`,
         production_date: stockInPurchaseDate,
-        expiry_date: stockInExpiryDate,
+        expiry_date: resolvedExpiryDate || null,
         initial_quantity: qty,
         remaining_quantity: qty,
         note: "Batch pembelian bahan baku",
@@ -326,6 +372,7 @@ const IngredientDetail = () => {
     showSuccess("Stok bahan baku berhasil ditambah");
     setStockInPurchaseDate("");
     setStockInExpiryDate("");
+    setStockInUseManualExpiryDate(false);
     loadMovements();
     loadBatches();
   };
@@ -349,8 +396,19 @@ const IngredientDetail = () => {
       .filter((batch) => batch.remaining_quantity > 0)
       .slice()
       .sort((a, b) => {
-        const aExpiry = a.expiry_date ? new Date(a.expiry_date).getTime() : Number.MAX_SAFE_INTEGER;
-        const bExpiry = b.expiry_date ? new Date(b.expiry_date).getTime() : Number.MAX_SAFE_INTEGER;
+        const aEffectiveExpiry = resolveEffectiveExpiryDate({
+          ingredientName: name || ingredient?.name || "bahan baku",
+          manualExpiryDate: a.expiry_date,
+          purchaseDate: a.production_date,
+        });
+        const bEffectiveExpiry = resolveEffectiveExpiryDate({
+          ingredientName: name || ingredient?.name || "bahan baku",
+          manualExpiryDate: b.expiry_date,
+          purchaseDate: b.production_date,
+        });
+
+        const aExpiry = aEffectiveExpiry ? new Date(aEffectiveExpiry).getTime() : Number.MAX_SAFE_INTEGER;
+        const bExpiry = bEffectiveExpiry ? new Date(bEffectiveExpiry).getTime() : Number.MAX_SAFE_INTEGER;
         if (aExpiry !== bExpiry) return aExpiry - bExpiry;
 
         const aProd = a.production_date ? new Date(a.production_date).getTime() : Number.MAX_SAFE_INTEGER;
@@ -475,7 +533,7 @@ const IngredientDetail = () => {
               <p className="text-2xl font-bold text-emerald-800">{stockLeft}</p>
             </div>
           </div>
-          <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+          <div className="mt-3 grid gap-2 text-sm sm:grid-cols-4">
             <div className="rounded-xl bg-slate-50 px-3 py-2">
               <p className="text-xs uppercase tracking-wide text-slate-500">Pembelian Terakhir</p>
               <p className="font-semibold text-slate-900">{formatDateId(latestBatchPurchaseDate || lastPurchaseDate)}</p>
@@ -483,6 +541,11 @@ const IngredientDetail = () => {
             <div className="rounded-xl bg-slate-50 px-3 py-2">
               <p className="text-xs uppercase tracking-wide text-slate-500">Tanggal Expired</p>
               <p className="font-semibold text-slate-900">{formatDateId(nearestBatchExpiryDate || expiryDate)}</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500">Sumber: {summaryExpirySourceLabel}</p>
+            </div>
+            <div className={`rounded-xl px-3 py-2 ${getFreshnessPriorityClass(freshnessMeta.priority)}`}>
+              <p className="text-xs uppercase tracking-wide">Prioritas Pemakaian</p>
+              <p className="font-semibold">{freshnessMeta.label}</p>
             </div>
             <div className="rounded-xl bg-slate-50 px-3 py-2">
               <p className="text-xs uppercase tracking-wide text-slate-500">Minimum Stok</p>
@@ -609,7 +672,7 @@ const IngredientDetail = () => {
               </div>
             </div>
 
-            <div className="mt-3 rounded-2xl bg-slate-50 p-3">
+              <div className="mt-3 rounded-2xl bg-slate-50 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Data batch stok masuk</p>
               <div className="mt-2 grid gap-3 sm:grid-cols-2">
                 <div>
@@ -622,17 +685,41 @@ const IngredientDetail = () => {
                     disabled={stockActionLoading !== null}
                   />
                 </div>
-                <div>
-                  <Label className="text-sm font-semibold text-slate-700">Tanggal expired batch</Label>
-                  <Input
-                    className="mt-1 h-12 rounded-2xl bg-white text-base"
-                    type="date"
-                    value={stockInExpiryDate}
-                    onChange={(e) => setStockInExpiryDate(e.target.value)}
+
+                <div className="flex items-center gap-2 rounded-xl border bg-white px-3 py-2 sm:col-span-2">
+                  <input
+                    id="manual-expiry-stock-in"
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={stockInUseManualExpiryDate}
+                    onChange={(e) => {
+                      setStockInUseManualExpiryDate(e.target.checked);
+                      if (!e.target.checked) setStockInExpiryDate("");
+                    }}
                     disabled={stockActionLoading !== null}
                   />
+                  <Label htmlFor="manual-expiry-stock-in" className="text-sm font-semibold text-slate-700">
+                    Isi tanggal expired manual
+                  </Label>
                 </div>
+
+                {stockInUseManualExpiryDate && (
+                  <div>
+                    <Label className="text-sm font-semibold text-slate-700">Tanggal expired batch</Label>
+                    <Input
+                      className="mt-1 h-12 rounded-2xl bg-white text-base"
+                      type="date"
+                      value={stockInExpiryDate}
+                      onChange={(e) => setStockInExpiryDate(e.target.value)}
+                      disabled={stockActionLoading !== null}
+                    />
+                  </div>
+                )}
               </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Kosongkan tanggal expired untuk pakai estimasi otomatis: {estimatedStockInExpiry || "-"}.
+                {isLikelyNonPerishable ? " Item ini terdeteksi sebagai non-perishable, jadi expired boleh dikosongkan." : ""}
+              </p>
             </div>
 
           </section>
@@ -645,6 +732,22 @@ const IngredientDetail = () => {
               {batches.length ? (
                 batches.map((batch) => (
                   <div key={batch.id} className="rounded-2xl border bg-slate-50 p-4 text-sm">
+                    {(() => {
+                      const resolvedExpiryDate = resolveEffectiveExpiryDate({
+                        ingredientName: name || ingredient.name,
+                        manualExpiryDate: batch.expiry_date,
+                        purchaseDate: batch.production_date,
+                      });
+                      const sourceLabel = getExpirySourceLabel(
+                        inferExpirySource({
+                          ingredientName: name || ingredient.name,
+                          purchaseDate: batch.production_date,
+                          expiryDate: resolvedExpiryDate,
+                        }),
+                      );
+
+                      return (
+                        <>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kode Batch</p>
@@ -665,7 +768,8 @@ const IngredientDetail = () => {
                       </div>
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal Expired</p>
-                        <p className="text-sm font-semibold text-slate-900">{formatDateId(batch.expiry_date)}</p>
+                        <p className="text-sm font-semibold text-slate-900">{formatDateId(resolvedExpiryDate)}</p>
+                        <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500">Sumber: {sourceLabel}</p>
                       </div>
                     </div>
 
@@ -697,6 +801,9 @@ const IngredientDetail = () => {
                         </Button>
                       </div>
                     </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 ))
               ) : (
